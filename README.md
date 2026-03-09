@@ -1,6 +1,6 @@
-# EduTheia Landing Page
+# EduIDE Landing Page
 
-Landing page for EduTheia Cloud workspace management, providing a user-friendly interface for launching cloud-based development environments.
+Landing page for EduIDE Cloud workspace management, providing a user-friendly interface for launching cloud-based development environments.
 
 ## Features
 
@@ -23,8 +23,8 @@ Landing page for EduTheia Cloud workspace management, providing a user-friendly 
 
 ```bash
 # Clone the repository
-git clone https://github.com/ls1intum/EduTheia-landing-page.git
-cd EduTheia-landing-page
+git clone https://github.com/EduIDE/EduIDE-Landing-Page.git
+cd EduIDE-Landing-Page
 
 # Install dependencies
 npm install
@@ -51,10 +51,10 @@ The built files will be in the `dist/` directory.
 
 ```bash
 # Build the Docker image
-docker build -t ghcr.io/ls1intum/edutheia-landing-page:latest .
+docker build -t ghcr.io/EduIDE/eduidec-landing-page:latest .
 
 # Run the container
-docker run -d -p 80:80 ghcr.io/ls1intum/edutheia-landing-page:latest
+docker run -d -p 80:80 ghcr.io/EduIDE/eduidec-landing-page:latest
 ```
 
 ## Configuration
@@ -65,7 +65,7 @@ The landing page is configured via `public/config.js`. Create or modify this fil
 window.theiaCloudConfig = {
   // Basic configuration
   serviceAuthToken: "your-service-auth-token",
-  appName: "EduTheia",
+  appName: "EduIDE",
   serviceUrl: "https://your-theia-cloud-instance.com",
   appDefinition: "your-app-definition",
   useKeycloak: true,
@@ -78,11 +78,11 @@ window.theiaCloudConfig = {
 
   // Landing page options
   disableInfo: false,
-  infoTitle: "Welcome to EduTheia",
+  infoTitle: "Welcome to EduIDE",
   infoText: "Your cloud-based IDE for education",
   loadingText: "Loading your workspace...",
   logoFileExtension: "png",
-  pageTitle: "EduTheia Cloud",
+  pageTitle: "EduIDE Cloud",
 
   // Additional apps to display
   additionalApps: [
@@ -161,7 +161,7 @@ To enable Keycloak authentication:
 ### Project Structure
 
 ```
-EduTheia-landing-page/
+EduIDE-Landing-Page/
 ├── src/
 │   ├── components/          # React components
 │   │   ├── AppLogo.tsx
@@ -243,7 +243,7 @@ This project uses GitHub Actions for automated Docker builds and multi-architect
 
 ### Image Registry
 
-Built images are pushed to: `ghcr.io/ls1intum/edutheia-landing-page`
+Built images are pushed to: `ghcr.io/EduIDE/eduidec-landing-page`
 
 ## License
 
@@ -262,10 +262,10 @@ Contributions are welcome! Please follow these guidelines:
 ## Support
 
 For issues and questions:
-- **GitHub Issues**: https://github.com/ls1intum/EduTheia-landing-page/issues
-- **Documentation**: [EduTheia Wiki](https://github.com/ls1intum/theia-cloud/wiki)
+- **GitHub Issues**: https://github.com/EduIDE/EduIDE-Landing-Page/issues
+- **Documentation**: [EduIDE Docs](https://EduIDE.github.io/Docs)
 
 ## Related Projects
 
-- [theia-cloud](https://github.com/ls1intum/theia-cloud): Main Theia Cloud project
-- [theia-cloud-operator](https://github.com/ls1intum/theia-cloud-operator): Kubernetes operator for Theia Cloud
+- [EduIDE-Cloud](https://github.com/EduIDE/EduIDE-Cloud): Main EduIDE Cloud project
+- [EduIDE-deployment](https://github.com/EduIDE/EduIDE-deployment): Kubernetes deployment for EduIDE Cloud
