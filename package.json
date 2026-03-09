@@ -1,7 +1,7 @@
 {
-  "name": "edutheia-landing-page",
+  "name": "eduidec-landing-page",
   "version": "1.0.0",
-  "description": "Landing page for EduTheia Cloud workspace management",
+  "description": "Landing page for EduIDE Cloud workspace management",
   "license": "EPL-2.0 OR GPL-2.0 WITH Classpath-exception-2.0",
   "private": true,
   "type": "module",
@@ -10,11 +10,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ls1intum/EduTheia-landing-page.git"
+    "url": "https://github.com/EduIDE/EduIDE-Landing-Page.git"
   },
-  "homepage": "https://github.com/ls1intum/EduTheia-landing-page#readme",
+  "homepage": "https://github.com/EduIDE/EduIDE-Landing-Page#readme",
   "bugs": {
-    "url": "https://github.com/ls1intum/EduTheia-landing-page/issues"
+    "url": "https://github.com/EduIDE/EduIDE-Landing-Page/issues"
   },
   "keywords": [
     "theia",

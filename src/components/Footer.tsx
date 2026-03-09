@@ -49,7 +49,7 @@ export const Footer = ({ selectedAppDefinition, onNavigate, footerLinks }: Foote
             🐞 {footerLinks.bugReport.text}
             </a>
           ) : (
-            <a target='_blank' href='https://github.com/ls1intum/theia-cloud/issues' rel='noreferrer'>🐞 Report a bug</a>
+            <a target='_blank' href='https://github.com/EduIDE/EduIDE-Cloud/issues' rel='noreferrer'>🐞 Report a bug</a>
           )}
           {' or '}
           {footerLinks?.featureRequest ? (
@@ -61,7 +61,7 @@ export const Footer = ({ selectedAppDefinition, onNavigate, footerLinks }: Foote
             💡 {footerLinks.featureRequest.text}
             </a>
           ) : (
-            <a target='_blank' href='https://github.com/ls1intum/theia-cloud/issues' rel='noreferrer'>💡 Request a feature</a>
+            <a target='_blank' href='https://github.com/EduIDE/EduIDE-Cloud/issues' rel='noreferrer'>💡 Request a feature</a>
           )}
         </div>
 

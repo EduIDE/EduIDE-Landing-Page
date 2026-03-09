@@ -49,11 +49,11 @@ window.theiaCloudConfig = {
     },
     bugReport: {
       text: 'Report a bug',
-      url: 'https://github.com/ls1intum/theia-cloud/issues'
+      url: 'https://github.com/EduIDE/EduIDE-Cloud/issues'
     },
     featureRequest: {
       text: 'Request a feature',
-      url: 'https://github.com/ls1intum/theia-cloud/issues'
+      url: 'https://github.com/EduIDE/EduIDE-Cloud/issues'
     },
     about: {
       text: 'About',

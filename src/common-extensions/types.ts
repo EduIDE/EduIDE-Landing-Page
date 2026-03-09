@@ -1,6 +1,6 @@
 /**
  * Local type extensions for @eclipse-theiacloud/common
- * These extend the npm package types with EduTheia-specific functionality
+ * These extend the npm package types with EduIDE-specific functionality
  */
 
 import type { AppDefinition, TheiaCloudConfig } from '@eclipse-theiacloud/common';
@@ -43,7 +43,7 @@ export type ExtendedAppDefinition = AppDefinition & {
 };
 
 /**
- * Extended TheiaCloudConfig with additional EduTheia properties
+ * Extended TheiaCloudConfig with additional EduIDE properties
  * Uses intersection type since TheiaCloudConfig is a type alias
  */
 export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> & {
