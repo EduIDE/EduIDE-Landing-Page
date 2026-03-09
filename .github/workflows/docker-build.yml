@@ -47,10 +47,10 @@ jobs:
 
   build-and-push-landing-page:
     needs: determine-tag
-    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@feature/arc-runner-support
+    uses: EduIDE/.github/.github/workflows/build-and-push-docker-image.yml@feature/arc-runner-support
     with:
       docker-file: Dockerfile
-      image-name: ghcr.io/ls1intum/edutheia-landing-page
+      image-name: ghcr.io/EduIDE/eduidec-landing-page
       docker-context: .
       tags: |
         ${{ needs.determine-tag.outputs.base_tag }}
@@ -58,7 +58,7 @@ jobs:
       build-amd64: true
       build-arm64: ${{ github.event_name != 'pull_request' }}
       cache-from: |
-        type=registry,ref=ghcr.io/ls1intum/edutheia-landing-page:${{ needs.determine-tag.outputs.cache_tag }}
-        type=registry,ref=ghcr.io/ls1intum/edutheia-landing-page:build-cache
-      cache-to: "type=registry,ref=ghcr.io/ls1intum/edutheia-landing-page:${{ needs.determine-tag.outputs.cache_tag }},mode=max"
+        type=registry,ref=ghcr.io/EduIDE/eduidec-landing-page:${{ needs.determine-tag.outputs.cache_tag }}
+        type=registry,ref=ghcr.io/EduIDE/eduidec-landing-page:build-cache
+      cache-to: "type=registry,ref=ghcr.io/EduIDE/eduidec-landing-page:${{ needs.determine-tag.outputs.cache_tag }},mode=max"
     secrets: inherit
