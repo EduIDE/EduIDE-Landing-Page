@@ -44,7 +44,7 @@ jobs:
     uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@main
     with:
       docker-file: Dockerfile
-      image-name: eduide/eduide-landing-page
+      image-name: ghcr.io/eduide/eduide-landing-page
       docker-context: .
       tags: |
         ${{ needs.determine-tag.outputs.base_tag }}
