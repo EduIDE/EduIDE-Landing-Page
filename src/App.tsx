@@ -355,16 +355,17 @@ function App(): JSX.Element {
 
     const authenticate: () => void = (): void => {
         const keycloak = new Keycloak(keycloakConfig);
+        const redirectUri = window.location.origin + window.location.pathname + window.location.search;
 
         keycloak
             .init({
-                redirectUri: window.location.origin + window.location.pathname,
+                redirectUri,
                 checkLoginIframe: false
             })
             .then((authenticated: boolean) => {
                 if (!authenticated) {
                     keycloak.login({
-                        redirectUri: window.location.origin + window.location.pathname,
+                        redirectUri,
                         action: 'webauthn-register-passwordless:skip_if_exists'
                     });
                 } else {
