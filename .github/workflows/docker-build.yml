@@ -47,7 +47,7 @@ jobs:
 
   build-and-push-landing-page:
     needs: determine-tag
-    uses: EduIDE/.github/.github/workflows/build-and-push-docker-image.yml@feature/arc-runner-support
+    uses: EduIDE/.github/.github/workflows/build-and-push-docker-image.yml@main
     with:
       docker-file: Dockerfile
       image-name: ghcr.io/EduIDE/eduidec-landing-page
