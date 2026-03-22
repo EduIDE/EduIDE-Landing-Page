@@ -227,15 +227,22 @@ function App(): JSX.Element {
 
                     if (config.useEphemeralStorage) {
                         workspace = undefined;
+                        console.log(`Launching ${appDefinition} with ephemeral storage as configured`);
                     } else {
                         if (!gitUri) {
-                            workspace = undefined;
+                            const fallbackWorkspaceId = Math.random().toString(36).substring(2, 10);
+                            workspace =
+                                'ws-' + appDefinition + '-playground-' + (config.useKeycloak ? username : user) + '-' + fallbackWorkspaceId;
+                            console.log(
+                                `Launching ${appDefinition} with persistent workspace ${workspace} (playground fallback)`
+                            );
                         } else {
                             // Artemis URLs look like: https://user@artemis.cit.tum.de/git/THEIATESTTESTEXERCISE/theiatesttestexercise-artemis_admin.git
                             //                                                                                   ^^^^^^^^^^^^^^^^^^^^^ we need this part
                             // First we split at the / character, get the last part, split at the - character and get the first part
                             const repoName = gitUri?.split('/').pop()?.split('-')[0] ?? Math.random().toString().substring(2, 10);
                             workspace = 'ws-' + appDefinition + '-' + repoName + '-' + (config.useKeycloak ? username : user);
+                            console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
                         }
                     }
 
