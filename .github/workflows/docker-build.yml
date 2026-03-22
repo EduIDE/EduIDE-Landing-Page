@@ -44,7 +44,7 @@ jobs:
     uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@feature/split-build-workflow-modes
     with:
       docker-file: Dockerfile
-      image-name: ghcr.io/EduIDE/eduidec-landing-page
+      image-name: eduide/eduidec-landing-page
       docker-context: .
       image-tag: ${{ inputs.image_tag || '' }}
       execution-mode: ${{ github.event_name == 'workflow_dispatch' && inputs.execution_mode || 'self-hosted-buildkit' }}
