@@ -24,6 +24,29 @@ let initialized = false;
 let initialAppName = '';
 let initialAppDefinition = '';
 let keycloakConfig: KeycloakConfig | undefined = undefined;
+const WORKSPACE_SEGMENT_LIMIT = 12;
+
+function createDeterministicId(value: string): string {
+    let hash = 0;
+
+    for (let i = 0; i < value.length; i += 1) {
+        hash = ((hash << 5) - hash) + value.charCodeAt(i);
+        hash |= 0;
+    }
+
+    return Math.abs(hash).toString(16).padStart(8, '0');
+}
+
+function sanitizeWorkspaceSegment(value: string | undefined, fallback: string): string {
+    const sanitized = (value ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '');
+
+    const normalized = sanitized.length > 0 ? sanitized : fallback;
+    return normalized.substring(0, Math.min(normalized.length, WORKSPACE_SEGMENT_LIMIT));
+}
 
 function App(): JSX.Element {
     const [config] = useState<ExtendedTheiaCloudConfig | undefined>(() => getTheiaCloudConfig());
@@ -224,20 +247,33 @@ function App(): JSX.Element {
                 .then(() => {
                     // ping successful continue with launch
                     let workspace: string;
+                    const workspaceUser = config.useKeycloak ? username : user;
+                    const workspaceUserSegment = sanitizeWorkspaceSegment(workspaceUser, 'user');
+                    const workspaceAppSegment = sanitizeWorkspaceSegment(appDefinition, 'app');
 
                     if (!gitUri) {
-                        const fallbackWorkspaceId = Math.random().toString(36).substring(2, 10);
                         workspace =
-                            'ws-' + appDefinition + '-playground-' + (config.useKeycloak ? username : user) + '-' + fallbackWorkspaceId;
+                            'ws-' +
+                            workspaceAppSegment +
+                            '-playground-' +
+                            workspaceUserSegment +
+                            '-' +
+                            createDeterministicId(`${workspaceUser}-${appDefinition}-playground`);
                         console.log(
                             `Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`
                         );
                     } else {
-                        // Artemis URLs look like: https://user@artemis.cit.tum.de/git/THEIATESTTESTEXERCISE/theiatesttestexercise-artemis_admin.git
-                        //                                                                                   ^^^^^^^^^^^^^^^^^^^^^ we need this part
-                        // First we split at the / character, get the last part, split at the - character and get the first part
-                        const repoName = gitUri?.split('/').pop()?.split('-')[0] ?? Math.random().toString().substring(2, 10);
-                        workspace = 'ws-' + appDefinition + '-' + repoName + '-' + (config.useKeycloak ? username : user);
+                        const repoName = gitUri.split('/').pop()?.replace(/\.git$/, '');
+                        const repoSegment = sanitizeWorkspaceSegment(repoName, 'repo');
+                        workspace =
+                            'ws-' +
+                            workspaceAppSegment +
+                            '-' +
+                            repoSegment +
+                            '-' +
+                            workspaceUserSegment +
+                            '-' +
+                            createDeterministicId(gitUri);
                         console.log(`Prepared persistent workspace ${workspace} for ${appDefinition}`);
                     }
 
