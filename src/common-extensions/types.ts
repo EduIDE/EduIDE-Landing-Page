@@ -40,6 +40,8 @@ export interface FooterLinksConfig {
  */
 export type ExtendedAppDefinition = AppDefinition & {
   serviceAuthToken?: string;
+  image?: string;
+  Image?: string;
 };
 
 /**

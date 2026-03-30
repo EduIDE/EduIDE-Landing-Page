@@ -15,7 +15,8 @@ window.theiaCloudConfig = {
     },
     {
       appId: "java-17-latest", 
-      appName: "Java"
+      appName: "Java",
+      image: "java-17"
     },
     {
       appId: "javascript-latest",
