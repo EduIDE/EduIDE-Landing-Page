@@ -326,7 +326,13 @@ function App(): JSX.Element {
                                   ? err.message
                                   : '';
 
-                        return status === 400 && reason.includes('workspace-backed session');
+                        if (status !== 400) {
+                            return false;
+                        }
+
+                        // Some service deployments currently return an empty 400 body for this rejection,
+                        // so the backend reason is not always available in the frontend error object.
+                        return reason.length === 0 || reason.includes('workspace-backed session');
                     };
 
                     // `useEphemeralStorage` means "prefer ephemeral when possible".
