@@ -319,20 +319,19 @@ function App(): JSX.Element {
                     const isWorkspaceRequiredFallbackError = (err: Error): boolean => {
                         const status = (err as any)?.status;
                         const serverReason = (err as any)?.serverError?.reason;
-                        const reason =
-                            typeof serverReason === 'string'
-                                ? serverReason
-                                : typeof err.message === 'string'
-                                  ? err.message
-                                  : '';
+                        const request = (err as any)?.request;
 
-                        if (status !== 400) {
+                        if (status !== 400 || request?.kind !== LaunchRequest.KIND || request?.ephemeral !== true) {
                             return false;
                         }
 
-                        // Some service deployments currently return an empty 400 body for this rejection,
-                        // so the backend reason is not always available in the frontend error object.
-                        return reason.length === 0 || reason.includes('workspace-backed session');
+                        if (typeof serverReason === 'string') {
+                            return serverReason.includes('workspace-backed session');
+                        }
+
+                        // Some service deployments currently return this rejection as an unstructured 400
+                        // without a JSON reason body, so we fall back to a workspace-backed launch.
+                        return true;
                     };
 
                     // `useEphemeralStorage` means "prefer ephemeral when possible".
