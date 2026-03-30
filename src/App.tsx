@@ -316,10 +316,18 @@ function App(): JSX.Element {
                         env: launchEnv
                     });
 
-                    const isWorkspaceRequiredFallbackError = (err: Error): boolean =>
-                        (err as any)?.status === 400 &&
-                        typeof err.message === 'string' &&
-                        err.message.includes('workspace-backed session');
+                    const isWorkspaceRequiredFallbackError = (err: Error): boolean => {
+                        const status = (err as any)?.status;
+                        const serverReason = (err as any)?.serverError?.reason;
+                        const reason =
+                            typeof serverReason === 'string'
+                                ? serverReason
+                                : typeof err.message === 'string'
+                                  ? err.message
+                                  : '';
+
+                        return status === 400 && reason.includes('workspace-backed session');
+                    };
 
                     // `useEphemeralStorage` means "prefer ephemeral when possible".
                     // App definitions that require a shared workspace are retried with a PVC-backed workspace.
