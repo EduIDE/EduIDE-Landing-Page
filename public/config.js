@@ -11,27 +11,46 @@ window.theiaCloudConfig = {
   additionalApps: [
     {
       appId: "c-latest",
-      appName: "C"
+      appName: "C",
+      buildSystems: [
+        { id: "makefile", label: "Makefile"}
+      ]
     },
     {
       appId: "java-17-latest", 
-      appName: "Java"
+      appName: "Java",
+      buildSystems: [
+        { id: "maven", label: "Maven" },
+        { id: "gradle", label: "Gradle "},
+      ]
     },
     {
       appId: "javascript-latest",
-      appName: "Javascript"
+      appName: "Javascript",
+      buildSystems: [
+        { id: "npm", label: "npm"}
+      ]
     },
     {
       appId: "ocaml-latest",
-      appName: "Ocaml"
+      appName: "Ocaml",
+      buildSystems: [
+        { id: "dune", label: "Dune"}
+      ]
     },
     {
       appId: "python-latest",
-      appName: "Python"
+      appName: "Python",
+      buildSystems: [
+        { id: "pip", label: "pip"}
+      ]
     },
     {
       appId: "rust-latest",
-      appName: "Rust"
+      appName: "Rust",
+      buildSystems: [
+        { id: "cargo", label: "Cargo"}
+      ]
     }
   ],
   disableInfo: true,

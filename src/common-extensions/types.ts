@@ -35,11 +35,20 @@ export interface FooterLinksConfig {
 }
 
 /**
+ * A single build system option for a language app
+ */
+export interface BuildSystemOption {
+    id: string;
+    label: string;
+}
+
+/**
  * Extended AppDefinition with service authentication token
  * Bridges the gap between the package's ServiceConfig and legacy usage
  */
 export type ExtendedAppDefinition = AppDefinition & {
   serviceAuthToken?: string;
+  buildSystems?: BuildSystemOption[]
 };
 
 /**
