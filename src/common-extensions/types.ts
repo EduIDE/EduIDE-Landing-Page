@@ -49,6 +49,8 @@ export interface BuildSystemOption {
 export type ExtendedAppDefinition = AppDefinition & {
   serviceAuthToken?: string;
   buildSystems?: BuildSystemOption[]
+  image?: string;
+  Image?: string;
 };
 
 /**

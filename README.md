@@ -89,6 +89,11 @@ window.theiaCloudConfig = {
     {
       serviceAuthToken: "app1-token",
       appName: "Python Environment"
+    },
+    {
+      serviceAuthToken: "java-17-no-ls",
+      appName: "Java 17 No-LS",
+      image: "java-17"
     }
   ]
 };
@@ -114,6 +119,12 @@ window.theiaCloudConfig = {
 | `logoFileExtension` | string | No | Logo file extension (png, svg, etc.) |
 | `additionalApps` | array | No | Additional apps to display |
 | `footerLinks` | object | No | Footer link configuration |
+
+Each entry in `additionalApps` may optionally include `image` (or `Image` for compatibility). When omitted, the landing page keeps the current behavior and derives the logo path from `appName`. When provided, the landing page uses that value instead:
+
+- Plain name like `java-17` becomes `/assets/logos/java-17-logo.png`
+- Filename like `java-17-logo.png` becomes `/assets/logos/java-17-logo.png`
+- Absolute path like `/custom/logo.png` is used as-is
 
 ## Query Parameters
 
