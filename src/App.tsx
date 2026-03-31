@@ -389,7 +389,7 @@ function App(): JSX.Element {
         [config, gitUri, username, user, token, artemisToken, artemisUrl, gitUser, gitMail, email]
     );
 
-    const handleAppSelected = (appId: string, appName: string): void => {
+    const handleAppSelected = (appId: string, _: string): void => {
         const isStandaloneMode = !artemisToken && !gitUri;
         if (isStandaloneMode) {
             const appDef = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appId);
