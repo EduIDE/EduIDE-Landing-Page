@@ -141,6 +141,20 @@
   margin: 0.5rem auto 1rem auto;
 }
 
+.Build-System__list {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+
+  max-width: 800px;
+  margin: 0.5rem auto 1rem auto;
+  padding: 24px;
+}
+
+.Build-System__list  > * {
+  flex: 0 1 150px;
+}
+
 .App__grid-item {
   background: var(--color-background-card);
   color: var(--color-text-primary);

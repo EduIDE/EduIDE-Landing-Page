@@ -1,8 +1,9 @@
+import React from 'react';
 import type { ExtendedAppDefinition } from '../common-extensions/types';
 
 interface SelectAppProps {
   appDefinitions: ExtendedAppDefinition[] | undefined;
-  onStartSession: (appDefinition: string) => void;
+  onSelectApp: (appId: string, appName: string) => void;
 }
 
 function normalizeLogoName(value: string): string {
@@ -29,14 +30,14 @@ function getAppLogoSrc(app: ExtendedAppDefinition): string {
   return `/assets/logos/${normalizeLogoName(trimmedImage)}-logo.png`;
 }
 
-export const SelectApp: React.FC<SelectAppProps> = ({ appDefinitions, onStartSession }: SelectAppProps) => (
+export const SelectApp: React.FC<SelectAppProps> = ({ appDefinitions, onSelectApp }: SelectAppProps) => (
   <div className='App__grid'>
     {appDefinitions &&
         appDefinitions.map((app, index) => (
           <button
             key={index}
             className='App__grid-item'
-            onClick={() => onStartSession(app.serviceAuthToken || app.appId)}
+            onClick={() => onSelectApp(app.serviceAuthToken || app.appId, app.appName)}
             data-testid={`launch-app-${app.serviceAuthToken || app.appId}`}
           >
             <img
@@ -44,7 +45,7 @@ export const SelectApp: React.FC<SelectAppProps> = ({ appDefinitions, onStartSes
               alt={`${app.appName} logo`}
               className='App__grid-item-logo'
             />
-            <div className='App__grid-item-launch'>Launch</div>
+            <div className='App__grid-item-launch'>Select</div>
             <div className='App__grid-item-text'>{app.appName}</div>
           </button>
         ))}
