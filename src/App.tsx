@@ -299,16 +299,7 @@ function App(): JSX.Element {
                         envFromMap.BUILD_SYSTEM = buildSystemId;
                     }
 
-                    const launchEnv = {
-                        fromMap: {
-                            THEIA: 'true',
-                            ARTEMIS_TOKEN: artemisToken!,
-                            ARTEMIS_URL: artemisUrl!,
-                            GIT_URI: gitUri!,
-                            GIT_USER: gitUser!,
-                            GIT_MAIL: gitMail!
-                        }
-                    };
+                    const launchEnv = { fromMap: envFromMap };
                     const launchUser = config.useKeycloak ? email! : user!;
                     const serviceAuthToken = getServiceAuthToken(config);
                     const createWorkspaceLaunchRequest = (): LaunchRequest => ({

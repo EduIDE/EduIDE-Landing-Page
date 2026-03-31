@@ -19,6 +19,7 @@ window.theiaCloudConfig = {
     {
       appId: "java-17-latest", 
       appName: "Java",
+      image: "java-17",
       buildSystems: [
         { id: "maven", label: "Maven" },
         { id: "gradle", label: "Gradle "},
