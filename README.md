@@ -83,6 +83,10 @@ window.theiaCloudConfig = {
   loadingText: "Loading your workspace...",
   logoFileExtension: "png",
   pageTitle: "EduIDE Cloud",
+  sentryEnable: true,
+  sentryEnvironment: "production",
+  // Optional override. If omitted, the default EduIDE Sentry DSN is used.
+  sentryDsn: "https://examplePublicKey@sentry.example.com/123",
 
   // Additional apps to display
   additionalApps: [
@@ -112,6 +116,9 @@ window.theiaCloudConfig = {
 | `infoText` | string | No | Info banner text |
 | `loadingText` | string | No | Loading message text |
 | `logoFileExtension` | string | No | Logo file extension (png, svg, etc.) |
+| `sentryEnable` | boolean | No | Enable Sentry browser monitoring |
+| `sentryEnvironment` | string | No | Sentry environment tag, e.g. namespace or deployment name |
+| `sentryDsn` | string | No | Override the default EduIDE Sentry DSN |
 | `additionalApps` | array | No | Additional apps to display |
 | `footerLinks` | object | No | Footer link configuration |
 

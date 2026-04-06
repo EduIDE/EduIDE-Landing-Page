@@ -50,6 +50,9 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
   additionalApps?: ExtendedAppDefinition[];
   footerLinks?: FooterLinksConfig;
   pageTitle?: string;
+  sentryEnable?: boolean;
+  sentryEnvironment?: string;
+  sentryDsn?: string;
 };
 
 /**
