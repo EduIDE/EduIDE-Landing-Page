@@ -341,7 +341,10 @@ function App(): JSX.Element {
 
                     // `useEphemeralStorage` means "prefer ephemeral when possible".
                     // App definitions that require a shared workspace are retried with a PVC-backed workspace.
-                    const launchPromise = config.useEphemeralStorage
+                    // Template launches always use workspace-backed sessions so that env vars
+                    // are set directly on the container (eager/ephemeral sessions inject env
+                    // vars via data bridge which arrives after the entrypoint has already run).
+                    const launchPromise = config.useEphemeralStorage && !buildSystemId
                         ? (() => {
                             console.log(`Attempting ephemeral launch for ${appDefinition}`);
                             return TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions).catch((err: Error) => {
