@@ -286,17 +286,14 @@ function App(): JSX.Element {
                         accessToken: token
                     };
 
-                    const envFromMap: Record<string, string> = {
-                        THEIA: 'true',
-                        ARTEMIS_TOKEN: artemisToken!,
-                        ARTEMIS_URL: artemisUrl!,
-                        GIT_URI: gitUri!,
-                        GIT_USER: gitUser!,
-                        GIT_MAIL: gitMail!
-                    };
+                    const envFromMap: Record<string, string> = { THEIA: 'true' };
+                    if (artemisToken) { envFromMap.ARTEMIS_TOKEN = artemisToken; }
+                    if (artemisUrl)   { envFromMap.ARTEMIS_URL   = artemisUrl; }
+                    if (gitUri)       { envFromMap.GIT_URI        = gitUri; }
+                    if (gitUser)      { envFromMap.GIT_USER       = gitUser; }
+                    if (gitMail)      { envFromMap.GIT_MAIL       = gitMail; }
                     if (buildSystemId) {
-                        envFromMap.STANDALONE_MODE = 'true';
-                        envFromMap.BUILD_SYSTEM = buildSystemId;
+                        envFromMap.TEMPLATE = buildSystemId;
                     }
 
                     const launchEnv = { fromMap: envFromMap };
