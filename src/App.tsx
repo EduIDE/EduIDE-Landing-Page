@@ -24,6 +24,29 @@ let initialized = false;
 let initialAppName = '';
 let initialAppDefinition = '';
 let keycloakConfig: KeycloakConfig | undefined = undefined;
+const WORKSPACE_SEGMENT_LIMIT = 12;
+
+function createDeterministicId(value: string): string {
+    let hash = 0;
+
+    for (let i = 0; i < value.length; i += 1) {
+        hash = ((hash << 5) - hash) + value.charCodeAt(i);
+        hash |= 0;
+    }
+
+    return Math.abs(hash).toString(16).padStart(8, '0');
+}
+
+function sanitizeWorkspaceSegment(value: string | undefined, fallback: string): string {
+    const sanitized = (value ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '');
+
+    const normalized = sanitized.length > 0 ? sanitized : fallback;
+    return normalized.substring(0, Math.min(normalized.length, WORKSPACE_SEGMENT_LIMIT));
+}
 
 function App(): JSX.Element {
     const [config] = useState<ExtendedTheiaCloudConfig | undefined>(() => getTheiaCloudConfig());
@@ -223,20 +246,35 @@ function App(): JSX.Element {
             TheiaCloud.ping(PingRequest.create(config.serviceUrl, getServiceAuthToken(config)))
                 .then(() => {
                     // ping successful continue with launch
-                    let workspace: string | undefined;
+                    let workspace: string;
+                    const workspaceUser = config.useKeycloak ? username : user;
+                    const workspaceUserSegment = sanitizeWorkspaceSegment(workspaceUser, 'user');
+                    const workspaceAppSegment = sanitizeWorkspaceSegment(appDefinition, 'app');
 
-                    if (config.useEphemeralStorage) {
-                        workspace = undefined;
+                    if (!gitUri) {
+                        workspace =
+                            'ws-' +
+                            workspaceAppSegment +
+                            '-playground-' +
+                            workspaceUserSegment +
+                            '-' +
+                            createDeterministicId(`${workspaceUser}-${appDefinition}-playground`);
+                        console.log(
+                            `Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`
+                        );
                     } else {
-                        if (!gitUri) {
-                            workspace = undefined;
-                        } else {
-                            // Artemis URLs look like: https://user@artemis.cit.tum.de/git/THEIATESTTESTEXERCISE/theiatesttestexercise-artemis_admin.git
-                            //                                                                                   ^^^^^^^^^^^^^^^^^^^^^ we need this part
-                            // First we split at the / character, get the last part, split at the - character and get the first part
-                            const repoName = gitUri?.split('/').pop()?.split('-')[0] ?? Math.random().toString().substring(2, 10);
-                            workspace = 'ws-' + appDefinition + '-' + repoName + '-' + (config.useKeycloak ? username : user);
-                        }
+                        const repoName = gitUri.split('/').pop()?.replace(/\.git$/, '');
+                        const repoSegment = sanitizeWorkspaceSegment(repoName, 'repo');
+                        workspace =
+                            'ws-' +
+                            workspaceAppSegment +
+                            '-' +
+                            repoSegment +
+                            '-' +
+                            workspaceUserSegment +
+                            '-' +
+                            createDeterministicId(gitUri);
+                        console.log(`Prepared persistent workspace ${workspace} for ${appDefinition}`);
                     }
 
                     const requestOptions: RequestOptions = {
@@ -280,32 +318,80 @@ function App(): JSX.Element {
           });
         */
 
-                    const launchRequest = {
-                        serviceUrl: config.serviceUrl,
-                        appId: getServiceAuthToken(config),
-                        user: config.useKeycloak ? email! : user!,
-                        appDefinition: appDefinition,
-                        workspaceName: workspace,
-                        env: {
-                            fromMap: {
-                                THEIA: 'true',
-                                ARTEMIS_TOKEN: artemisToken!,
-                                ARTEMIS_URL: artemisUrl!,
-                                GIT_URI: gitUri!,
-                                GIT_USER: gitUser!,
-                                GIT_MAIL: gitMail!
-                            }
+                    const launchEnv = {
+                        fromMap: {
+                            THEIA: 'true',
+                            ARTEMIS_TOKEN: artemisToken!,
+                            ARTEMIS_URL: artemisUrl!,
+                            GIT_URI: gitUri!,
+                            GIT_USER: gitUser!,
+                            GIT_MAIL: gitMail!
                         }
-                    } satisfies LaunchRequest;
+                    };
+                    const launchUser = config.useKeycloak ? email! : user!;
+                    const serviceAuthToken = getServiceAuthToken(config);
+                    const createWorkspaceLaunchRequest = (): LaunchRequest => ({
+                        ...LaunchRequest.createWorkspace(
+                            config.serviceUrl,
+                            serviceAuthToken,
+                            appDefinition,
+                            undefined,
+                            launchUser,
+                            workspace
+                        ),
+                        env: launchEnv
+                    });
+                    const createEphemeralLaunchRequest = (): LaunchRequest => ({
+                        ...LaunchRequest.ephemeral(
+                            config.serviceUrl,
+                            serviceAuthToken,
+                            appDefinition,
+                            undefined,
+                            launchUser
+                        ),
+                        env: launchEnv
+                    });
 
-                    // TheiaCloud.launchAndRedirect(
-                    // config.useEphemeralStorage
-                    //  ? LaunchRequest.ephemeral(config.serviceUrl, config.appId, appDefinition, 5, email)
-                    //  : LaunchRequest.createWorkspace(config.serviceUrl, config.appId, appDefinition, 5, email, workspace),
+                    const isWorkspaceRequiredFallbackError = (err: Error): boolean => {
+                        const status = (err as any)?.status;
+                        const serverReason = (err as any)?.serverError?.reason;
+                        const request = (err as any)?.request;
 
-                    // TheiaCloud.Session.list
+                        if (status !== 400 || request?.kind !== LaunchRequest.KIND || request?.ephemeral !== true) {
+                            return false;
+                        }
 
-                    TheiaCloud.launchAndRedirect(launchRequest, requestOptions)
+                        if (typeof serverReason === 'string') {
+                            return serverReason.includes('workspace-backed session');
+                        }
+
+                        // Some service deployments currently return this rejection as an unstructured 400
+                        // without a JSON reason body, so we fall back to a workspace-backed launch.
+                        return true;
+                    };
+
+                    // `useEphemeralStorage` means "prefer ephemeral when possible".
+                    // App definitions that require a shared workspace are retried with a PVC-backed workspace.
+                    const launchPromise = config.useEphemeralStorage
+                        ? (() => {
+                            console.log(`Attempting ephemeral launch for ${appDefinition}`);
+                            return TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions).catch((err: Error) => {
+                                if (!isWorkspaceRequiredFallbackError(err)) {
+                                    throw err;
+                                }
+
+                                console.log(
+                                    `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
+                                );
+                                return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
+                            });
+                        })()
+                        : (() => {
+                            console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
+                            return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
+                        })();
+
+                    launchPromise
                         .catch((err: Error) => {
                             if (err && (err as any).status === 473) {
                                 setError(
