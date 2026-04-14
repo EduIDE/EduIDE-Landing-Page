@@ -395,7 +395,7 @@ function App(): JSX.Element {
             const appDef = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appId);
             const buildSystems = appDef?.buildSystems ?? [];
             if (buildSystems.length <= 1) {
-                handleStartSession(appId, buildSystems[0]?.id ?? 'none');
+                handleStartSession(appId, buildSystems.length === 1 ? buildSystems[0].id : undefined);
             } else {
                 setStandaloneAppDef(appId);
                 setStandaloneWizardStep('buildSystem');

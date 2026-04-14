@@ -22,7 +22,7 @@ window.theiaCloudConfig = {
       image: "java-17",
       buildSystems: [
         { id: "maven", label: "Maven" },
-        { id: "gradle", label: "Gradle "},
+        { id: "gradle", label: "Gradle" },
       ]
     },
     {
