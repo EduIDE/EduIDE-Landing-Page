@@ -437,7 +437,7 @@ function App(): JSX.Element {
 
     /* eslint-enable react-hooks/rules-of-hooks */
 
-    document.title = config.pageTitle || 'TUM Theia Cloud';
+    document.title = config.pageTitle || 'EduIDE Cloud';
 
     const authenticate: () => void = (): void => {
         const keycloak = new Keycloak(keycloakConfig);
@@ -511,7 +511,7 @@ function App(): JSX.Element {
                             <div>
                                 <div style={{ marginTop: '2rem' }}></div>
                                 <AppLogo fileExtension={logoFileExtension} />
-                                <h2 className='App__title'>Choose your Online IDE</h2>
+                                <h2 className='App__title'>Choose your Programming Language</h2>
                                 <div>
                                     {needsLogin ? (
                                         <LoginButton login={authenticate} />

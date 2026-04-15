@@ -11,14 +11,14 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
     <div className='privacy__container'>
       <div className='privacy__header'>
         <h1>Privacy Policy</h1>
-        <p>Data protection information for TUM Theia Cloud</p>
+        <p>Data protection information for EduIDE Cloud</p>
         <button onClick={() => onNavigate ? onNavigate('home') : window.history.back()} className='privacy__back-btn'>← Back</button>
       </div>
 
       <div className='privacy__content'>
         <div className='privacy__card'>
           <h2>Data Controller</h2>
-          <p>The Technical University of Munich (TUM) is responsible for the processing of personal data in connection with the TUM Theia Cloud service.</p>
+          <p>The Technical University of Munich (TUM) is responsible for the processing of personal data in connection with the EduIDE Cloud service.</p>
         </div>
 
         <div className='privacy__card'>
@@ -40,7 +40,7 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
           <h2>Purpose of Processing</h2>
           <p>Personal data is processed for the following purposes:</p>
           <ul className='privacy__list'>
-            <li>Provision of the TUM Theia Cloud service</li>
+            <li>Provision of the EduIDE Cloud service</li>
             <li>User authentication and authorization</li>
             <li>Technical support and maintenance</li>
             <li>Compliance with legal obligations</li>

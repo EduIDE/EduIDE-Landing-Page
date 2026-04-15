@@ -26,7 +26,7 @@ const getGravatarUrl = (email: string, size: number = 40): string => {
 export const Header = ({ email, authenticate, logoutUrl }: HeaderProps): JSX.Element => (
   <div className='header'>
     <div className='header__app-name'>
-      <h1 className='header__title'>TUM Theia Cloud</h1>
+      <h1 className='header__title'>EduIDE Cloud</h1>
     </div>
     <div className='header__actions'>
       <ThemeToggle />

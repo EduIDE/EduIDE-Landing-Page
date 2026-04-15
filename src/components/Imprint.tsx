@@ -11,7 +11,7 @@ export const Imprint: React.FC<ImprintProps> = ({ onNavigate }) => (
     <div className='imprint__container'>
       <div className='imprint__header'>
         <h1>Imprint</h1>
-        <p>Legal information for TUM Theia Cloud</p>
+        <p>Legal information for EduIDE Cloud</p>
         <button onClick={() => onNavigate ? onNavigate('home') : window.history.back()} className='imprint__back-btn'>← Back</button>
       </div>
 
