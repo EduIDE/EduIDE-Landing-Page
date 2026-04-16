@@ -48,6 +48,10 @@ function sanitizeWorkspaceSegment(value: string | undefined, fallback: string): 
     return normalized.substring(0, Math.min(normalized.length, WORKSPACE_SEGMENT_LIMIT));
 }
 
+function getCurrentRedirectUri(): string {
+    return window.location.href;
+}
+
 function App(): JSX.Element {
     const [config] = useState<ExtendedTheiaCloudConfig | undefined>(() => getTheiaCloudConfig());
     const [error, setError] = useState<string>();
@@ -215,7 +219,7 @@ function App(): JSX.Element {
             keycloak
                 .init({
                     onLoad: 'check-sso',
-                    redirectUri: window.location.href,
+                    redirectUri: getCurrentRedirectUri(),
                     checkLoginIframe: false
                 })
                 .then(authenticated => {
@@ -444,13 +448,13 @@ function App(): JSX.Element {
 
         keycloak
             .init({
-                redirectUri: window.location.origin + window.location.pathname,
+                redirectUri: getCurrentRedirectUri(),
                 checkLoginIframe: false
             })
             .then((authenticated: boolean) => {
                 if (!authenticated) {
                     keycloak.login({
-                        redirectUri: window.location.origin + window.location.pathname,
+                        redirectUri: getCurrentRedirectUri(),
                         action: 'webauthn-register-passwordless:skip_if_exists'
                     });
                 } else {
