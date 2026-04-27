@@ -441,25 +441,16 @@ function App(): JSX.Element {
 
     const authenticate: () => void = (): void => {
         const keycloak = new Keycloak(keycloakConfig);
-        const redirectUri = window.location.origin + window.location.pathname + window.location.search;
 
         keycloak
             .init({
-<<<<<<< HEAD
-                redirectUri,
-=======
                 redirectUri: getCurrentRedirectUri(),
->>>>>>> main
                 checkLoginIframe: false
             })
             .then((authenticated: boolean) => {
                 if (!authenticated) {
                     keycloak.login({
-<<<<<<< HEAD
-                        redirectUri,
-=======
                         redirectUri: getCurrentRedirectUri(),
->>>>>>> main
                         action: 'webauthn-register-passwordless:skip_if_exists'
                     });
                 } else {
@@ -521,13 +512,9 @@ function App(): JSX.Element {
                             <div>
                                 <div style={{ marginTop: '2rem' }}></div>
                                 <AppLogo fileExtension={logoFileExtension} />
-<<<<<<< HEAD
                                 <h2 className='App__title'>
                                     {standaloneWizardStep === 'buildSystem' ? 'Choose your build system' : 'Choose your Online IDE'}
                                 </h2>
-=======
-                                <h2 className='App__title'>Choose your Programming Language</h2>
->>>>>>> main
                                 <div>
                                     {needsLogin ? (
                                         <LoginButton login={authenticate} />

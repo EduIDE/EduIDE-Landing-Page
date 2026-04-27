@@ -58,18 +58,12 @@ export type ExtendedAppDefinition = AppDefinition & {
  * Uses intersection type since TheiaCloudConfig is a type alias
  */
 export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> & {
-<<<<<<< HEAD
     additionalApps?: ExtendedAppDefinition[];
     footerLinks?: FooterLinksConfig;
     pageTitle?: string;
-=======
-  additionalApps?: ExtendedAppDefinition[];
-  footerLinks?: FooterLinksConfig;
-  pageTitle?: string;
-  sentryEnable?: boolean;
-  sentryEnvironment?: string;
-  sentryDsn?: string;
->>>>>>> main
+    sentryEnable?: boolean;
+    sentryEnvironment?: string;
+    sentryDsn?: string;
 };
 
 /**
