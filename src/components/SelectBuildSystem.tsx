@@ -18,15 +18,14 @@ export const SelectBuildSystem: React.FC<SelectBuildSystemProps> = ({ buildSyste
                     data-testid={`build-system-${option.id}`}
                 >
                     <img
-                    src={`/assets/logos/${option.id.toLowerCase().replace(/\s+/g, '-')}-logo.png`}
-                    alt={`${option.id} logo`}
-                    className='App__grid-item-logo'
+                        src={`/assets/logos/${option.id.toLowerCase().replace(/\s+/g, '-')}-logo.png`}
+                        alt={`${option.id} logo`}
+                        className='App__grid-item-logo'
                     />
                     <div className='App__grid-item-launch'>Select</div>
                     <div className='App__grid-item-text'>{option.label}</div>
                 </button>
             ))}
-     
         </div>
         <button className='App__try-now-button App__back-button' onClick={onBack}>
             &larr; Back

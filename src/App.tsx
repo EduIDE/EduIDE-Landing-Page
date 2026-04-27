@@ -31,7 +31,7 @@ function createDeterministicId(value: string): string {
     let hash = 0;
 
     for (let i = 0; i < value.length; i += 1) {
-        hash = ((hash << 5) - hash) + value.charCodeAt(i);
+        hash = (hash << 5) - hash + value.charCodeAt(i);
         hash |= 0;
     }
 
@@ -262,11 +262,12 @@ function App(): JSX.Element {
                             workspaceUserSegment +
                             '-' +
                             createDeterministicId(`${workspaceUser}-${appDefinition}-playground`);
-                        console.log(
-                            `Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`
-                        );
+                        console.log(`Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`);
                     } else {
-                        const repoName = gitUri.split('/').pop()?.replace(/\.git$/, '');
+                        const repoName = gitUri
+                            .split('/')
+                            .pop()
+                            ?.replace(/\.git$/, '');
                         const repoSegment = sanitizeWorkspaceSegment(repoName, 'repo');
                         workspace =
                             'ws-' +
@@ -287,11 +288,21 @@ function App(): JSX.Element {
                     };
 
                     const envFromMap: Record<string, string> = { THEIA: 'true' };
-                    if (artemisToken) { envFromMap.ARTEMIS_TOKEN = artemisToken; }
-                    if (artemisUrl)   { envFromMap.ARTEMIS_URL   = artemisUrl; }
-                    if (gitUri)       { envFromMap.GIT_URI        = gitUri; }
-                    if (gitUser)      { envFromMap.GIT_USER       = gitUser; }
-                    if (gitMail)      { envFromMap.GIT_MAIL       = gitMail; }
+                    if (artemisToken) {
+                        envFromMap.ARTEMIS_TOKEN = artemisToken;
+                    }
+                    if (artemisUrl) {
+                        envFromMap.ARTEMIS_URL = artemisUrl;
+                    }
+                    if (gitUri) {
+                        envFromMap.GIT_URI = gitUri;
+                    }
+                    if (gitUser) {
+                        envFromMap.GIT_USER = gitUser;
+                    }
+                    if (gitMail) {
+                        envFromMap.GIT_MAIL = gitMail;
+                    }
                     if (buildSystemId) {
                         envFromMap.TEMPLATE = buildSystemId;
                     }
@@ -311,13 +322,7 @@ function App(): JSX.Element {
                         env: launchEnv
                     });
                     const createEphemeralLaunchRequest = (): LaunchRequest => ({
-                        ...LaunchRequest.ephemeral(
-                            config.serviceUrl,
-                            serviceAuthToken,
-                            appDefinition,
-                            undefined,
-                            launchUser
-                        ),
+                        ...LaunchRequest.ephemeral(config.serviceUrl, serviceAuthToken, appDefinition, undefined, launchUser),
                         env: launchEnv
                     });
 
@@ -344,24 +349,27 @@ function App(): JSX.Element {
                     // Template launches always use workspace-backed sessions so that env vars
                     // are set directly on the container (eager/ephemeral sessions inject env
                     // vars via data bridge which arrives after the entrypoint has already run).
-                    const launchPromise = config.useEphemeralStorage && !buildSystemId
-                        ? (() => {
-                            console.log(`Attempting ephemeral launch for ${appDefinition}`);
-                            return TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions).catch((err: Error) => {
-                                if (!isWorkspaceRequiredFallbackError(err)) {
-                                    throw err;
-                                }
+                    const launchPromise =
+                        config.useEphemeralStorage && !buildSystemId
+                            ? (() => {
+                                  console.log(`Attempting ephemeral launch for ${appDefinition}`);
+                                  return TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions).catch(
+                                      (err: Error) => {
+                                          if (!isWorkspaceRequiredFallbackError(err)) {
+                                              throw err;
+                                          }
 
-                                console.log(
-                                    `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
-                                );
-                                return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
-                            });
-                        })()
-                        : (() => {
-                            console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
-                            return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
-                        })();
+                                          console.log(
+                                              `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
+                                          );
+                                          return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
+                                      }
+                                  );
+                              })()
+                            : (() => {
+                                  console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
+                                  return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
+                              })();
 
                     launchPromise
                         .catch((err: Error) => {
