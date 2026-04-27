@@ -24,27 +24,35 @@ const getGravatarUrl = (email: string, size: number = 40): string => {
 };
 
 export const Header = ({ email, authenticate, logoutUrl }: HeaderProps): JSX.Element => (
-    <div className='header'>
-        <div className='header__app-name'>
-            <h1 className='header__title'>TUM Theia Cloud</h1>
-        </div>
-        <div className='header__actions'>
-            <ThemeToggle />
-            {email ? (
-                <div className='header__user-info'>
-                    <img src={getGravatarUrl(email, 40)} alt='User Avatar' className='header__avatar' />
-                    <span className='header__email'>{email}</span>
-                </div>
-            ) : authenticate ? (
-                <button className='header__login-btn' onClick={authenticate}>
-                    Login
-                </button>
-            ) : undefined}
-            {logoutUrl && (
-                <button className='header__logout-btn' onClick={() => (window.location.href = logoutUrl)} data-testid='logoutButton'>
-                    Logout
-                </button>
-            )}
-        </div>
+  <div className='header'>
+    <div className='header__app-name'>
+      <h1 className='header__title'>EduIDE Cloud</h1>
     </div>
+    <div className='header__actions'>
+      <ThemeToggle />
+      {email ? (
+        <div className='header__user-info'>
+          <img
+            src={getGravatarUrl(email, 40)}
+            alt="User Avatar"
+            className='header__avatar'
+          />
+          <span className='header__email'>{email}</span>
+        </div>
+      ) : authenticate ? (
+        <button className='header__login-btn' onClick={authenticate}>
+          Login
+        </button>
+      ) : undefined}
+      {logoutUrl && (
+        <button
+          className='header__logout-btn'
+          onClick={() => window.location.href = logoutUrl}
+          data-testid="logoutButton"
+        >
+          Logout
+        </button>
+      )}
+    </div>
+  </div>
 );

@@ -7,7 +7,7 @@ window.theiaCloudConfig = {
   serviceUrl: 'http://localhost:8081/service',
   appDefinition: 'ghcr.io/ls1intum/theia/java-17:latest',
   useEphemeralStorage: true,
-  pageTitle: 'TUM Theia Cloud',
+  pageTitle: 'EduIDE Cloud',
   additionalApps: [
     {
       appId: "c-latest",
@@ -59,6 +59,10 @@ window.theiaCloudConfig = {
   infoTitle: '',
   loadingText: 'Preparing your personal Online IDE...',
   logoFileExtension: 'png',
+  sentryEnable: true,
+  sentryEnvironment: 'local',
+  // Optional override. If unset, the default EduIDE Sentry DSN is used.
+  // sentryDsn: 'https://examplePublicKey@sentry.example.com/123',
   // Footer links configuration
   // All footer links are optional - if not provided, default values will be used
   footerLinks: {

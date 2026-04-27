@@ -133,6 +133,7 @@
 }
 
 .App__grid {
+<<<<<<< HEAD
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 20px;
@@ -152,6 +153,14 @@
 
 .Build-System__list > * {
     flex: 0 1 150px;
+=======
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  padding: 24px;
+  max-width: 500px;
+  margin: 0.5rem auto 1rem auto;
+>>>>>>> main
 }
 
 .App__grid-item {
