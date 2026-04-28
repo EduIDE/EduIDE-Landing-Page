@@ -58,40 +58,30 @@
 }
 
 .privacy__content {
-    display: grid;
-    gap: 2rem;
-}
-
-.privacy__card {
     background: var(--color-background-card);
     border-radius: 1rem;
     padding: 2rem;
     border: 1px solid var(--color-border);
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
 }
 
 /* Light mode specific styling */
-[data-theme='light'] .privacy__card {
+[data-theme='light'] .privacy__content {
     background: #ffffff;
     border: 1px solid #e0e0e0;
 }
 
-.privacy__card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--color-text-secondary), var(--color-text-primary));
-    opacity: 0.8;
+.privacy__card {
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--color-border);
 }
 
-.privacy__card:hover {
-    transform: translateY(-4px);
-    border-color: var(--color-border-hover);
+.privacy__card:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.privacy__card:first-child {
+    padding-top: 0;
 }
 
 .privacy__card h2 {
@@ -104,13 +94,6 @@
     gap: 0.75rem;
 }
 
-.privacy__card h2::before {
-    content: '';
-    width: 4px;
-    height: 1.5rem;
-    background: var(--color-text-secondary);
-    border-radius: 2px;
-}
 
 .privacy__card h3 {
     color: var(--color-text-primary);
@@ -160,7 +143,7 @@
 }
 
 .privacy__list li::before {
-    content: '✓';
+    content: '•';
     position: absolute;
     left: 0;
     top: 0.75rem;
@@ -169,16 +152,6 @@
     font-size: 1.1rem;
 }
 
-.privacy__list li:hover {
-    background: var(--color-background);
-    padding-left: 2.5rem;
-    border-radius: 0.5rem;
-}
-
-/* Light mode specific styling */
-[data-theme='light'] .privacy__list li:hover {
-    background: #ffffff;
-}
 
 .privacy__details {
     display: flex;

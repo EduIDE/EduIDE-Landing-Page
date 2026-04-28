@@ -32,8 +32,10 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
           <h2>2. Verarbeitete Daten</h2>
           <ul className='privacy__list'>
             <li><strong>Anmeldedaten:</strong> E-Mail-Adresse und Benutzername aus dem TUM-SSO/Keycloak-JWT; nur im Arbeitsspeicher während der Sitzung.</li>
-            <li><strong>Sitzungsdaten:</strong> Workspace-Kennung, IDE-Typ, Zeitstempel der letzten Aktivität; gespeichert in Kubernetes-Custom-Resources für das automatische Sitzungs-Timeout.</li>
-            <li><strong>Git-Daten:</strong> Git-Benutzername, Git-E-Mail, temporäres VCS-Zugriffstoken; nur im Arbeitsspeicher, wird über die Data Bridge injiziert und nicht persistiert.</li>
+            <li><strong>Sitzungsdaten:</strong> Workspace-Kennung, IDE-Typ, Zeitstempel der letzten Aktivität;
+              gespeichert in Kubernetes-Custom-Resources für das automatische Sitzungs-Timeout.</li>
+            <li><strong>Git-Daten:</strong> Git-Benutzername, Git-E-Mail, temporäres VCS-Zugriffstoken;
+              nur im Arbeitsspeicher, wird über die Data Bridge injiziert und nicht persistiert.</li>
             <li><strong>Server-Logs:</strong> IP-Adresse und Anfrage-Zeitstempel (Standard-HTTP-Logs) in der TUM-Infrastruktur.</li>
           </ul>
         </div>
@@ -79,8 +81,8 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
           <h2>7. Speicherdauer</h2>
           <ul className='privacy__list'>
             <li>Sitzungsdaten werden bei Sitzungsende gelöscht.</li>
-            <li>Workspace-Daten werden nach einer definierten Inaktivitätsperiode entfernt.</li>
-            <li>Server-Logs werden gemäß den TUM-Richtlinien aufbewahrt.</li>
+            <li>Workspace-Daten werden nach 2 Wochen Inaktivitätsperiode entfernt.</li>
+            <li>Server-Logs werden nach spätestens 90 Tagen gelöscht</li>
           </ul>
         </div>
 
@@ -196,11 +198,12 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
         <div className='privacy__card'>
           <h2>9. Data Protection Officer</h2>
           <p>
-            TUM's Data Protection Officer can be reached at:
+            TUM&apos;s Data Protection Officer can be reached at:
             <strong> datenschutz(at)tum.de</strong>
           </p>
         </div>
 
       </div>
     </div>
+  </div>
 );
