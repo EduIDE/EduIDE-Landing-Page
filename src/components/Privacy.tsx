@@ -3,7 +3,7 @@ import './Privacy.css';
 import React from 'react';
 
 interface PrivacyProps {
-  onNavigate?: (page: 'home' | 'imprint' | 'privacy') => void;
+    onNavigate?: (page: 'home' | 'imprint' | 'privacy') => void;
 }
 
 export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
@@ -203,5 +203,4 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
 
       </div>
     </div>
-  </div>
 );

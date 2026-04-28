@@ -7,31 +7,51 @@ window.theiaCloudConfig = {
   serviceUrl: 'http://localhost:8081/service',
   appDefinition: 'ghcr.io/ls1intum/theia/java-17:latest',
   useEphemeralStorage: true,
-  pageTitle: 'TUM Theia Cloud',
+  pageTitle: 'EduIDE Cloud',
   additionalApps: [
     {
       appId: "c-latest",
-      appName: "C"
+      appName: "C",
+      buildSystems: [
+        { id: "makefile", label: "Makefile"}
+      ]
     },
     {
       appId: "java-17-latest", 
-      appName: "Java"
+      appName: "Java",
+      image: "java-17",
+      buildSystems: [
+        { id: "maven", label: "Maven" },
+        { id: "gradle", label: "Gradle" },
+      ]
     },
     {
       appId: "javascript-latest",
-      appName: "Javascript"
+      appName: "Javascript",
+      buildSystems: [
+        { id: "npm", label: "npm"}
+      ]
     },
     {
       appId: "ocaml-latest",
-      appName: "Ocaml"
+      appName: "Ocaml",
+      buildSystems: [
+        { id: "dune", label: "Dune"}
+      ]
     },
     {
       appId: "python-latest",
-      appName: "Python"
+      appName: "Python",
+      buildSystems: [
+        { id: "pip", label: "pip"}
+      ]
     },
     {
       appId: "rust-latest",
-      appName: "Rust"
+      appName: "Rust",
+      buildSystems: [
+        { id: "cargo", label: "Cargo"}
+      ]
     }
   ],
   disableInfo: true,
@@ -39,6 +59,10 @@ window.theiaCloudConfig = {
   infoTitle: '',
   loadingText: 'Preparing your personal Online IDE...',
   logoFileExtension: 'png',
+  sentryEnable: true,
+  sentryEnvironment: 'local',
+  // Optional override. If unset, the default EduIDE Sentry DSN is used.
+  // sentryDsn: 'https://examplePublicKey@sentry.example.com/123',
   // Footer links configuration
   // All footer links are optional - if not provided, default values will be used
   footerLinks: {
@@ -49,11 +73,11 @@ window.theiaCloudConfig = {
     },
     bugReport: {
       text: 'Report a bug',
-      url: 'https://github.com/ls1intum/theia-cloud/issues'
+      url: 'https://github.com/EduIDE/EduIDE-Cloud/issues'
     },
     featureRequest: {
       text: 'Request a feature',
-      url: 'https://github.com/ls1intum/theia-cloud/issues'
+      url: 'https://github.com/EduIDE/EduIDE-Cloud/issues'
     },
     about: {
       text: 'About',

@@ -16,7 +16,7 @@ COPY public ./public
 
 # Build application
 RUN npm run build && \
-    chmod 644 /app/dist/favicon.ico || true
+    (chmod 644 /app/dist/favicon.ico || true)
 
 # Production stage
 FROM nginx:stable-alpine AS production

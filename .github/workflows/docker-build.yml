@@ -7,58 +7,52 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: '0 2 * * *'
   workflow_dispatch:
+    inputs:
+      execution_mode:
+        description: "Build backend to use"
+        required: false
+        default: self-hosted-buildkit
+        type: choice
+        options:
+          - self-hosted-buildkit
+          - github-runners
+      image_tag:
+        description: "Optional image tag override (e.g. my-test-tag)"
+        required: false
+        default: ""
+        type: string
+      arc_registry_cache:
+        description: "Enable ARC registry cache import/export (slower on stateful BuildKit; default off)"
+        required: false
+        default: false
+        type: boolean
+      disable_layer_cache:
+        description: "Disable Docker layer cache (--no-cache) for stress testing while keeping BuildKit mount caches"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.execution_mode || 'self-hosted-buildkit' }}
   cancel-in-progress: false
 
 jobs:
-  determine-tag:
-    runs-on: ubuntu-latest
-    outputs:
-      base_tag: ${{ steps.set-tag.outputs.base_tag }}
-      sha_tag: ${{ steps.set-tag.outputs.sha_tag }}
-      cache_tag: ${{ steps.set-tag.outputs.cache_tag }}
-    steps:
-      - name: Checkout for SHA access
-        uses: actions/checkout@v4
-
-      - name: Set tags
-        id: set-tag
-        run: |
-          SHORT_SHA=$(git rev-parse --short=7 HEAD)
-          
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            BASE_TAG="pr-${{ github.event.pull_request.number }}"
-            CACHE_TAG="build-cache-pr-${{ github.event.pull_request.number }}"
-          elif [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
-            BASE_TAG="latest"
-            CACHE_TAG="build-cache"
-          else
-            # For workflow_dispatch or push on feature branches
-            BASE_TAG="${{ github.ref_name }}"
-            CACHE_TAG="build-cache-${{ github.ref_name }}"
-          fi
-          
-          echo "base_tag=${BASE_TAG}" >> "$GITHUB_OUTPUT"
-          echo "sha_tag=${BASE_TAG}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "cache_tag=${CACHE_TAG}" >> "$GITHUB_OUTPUT"
-
   build-and-push-landing-page:
-    needs: determine-tag
-    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@feature/arc-runner-support
+    uses: ls1intum/.github/.github/workflows/build-and-push-docker-image.yml@feature/split-build-workflow-modes
     with:
       docker-file: Dockerfile
-      image-name: ghcr.io/ls1intum/edutheia-landing-page
+      image-name: eduide/eduidec-landing-page
       docker-context: .
-      tags: |
-        ${{ needs.determine-tag.outputs.base_tag }}
-        ${{ needs.determine-tag.outputs.sha_tag }}
+      image-tag: ${{ inputs.image_tag || '' }}
+      execution-mode: ${{ github.event_name == 'workflow_dispatch' && inputs.execution_mode || 'self-hosted-buildkit' }}
+      arc-registry-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.arc_registry_cache || false }}
+      no-cache: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.disable_layer_cache) || false }}
+      cache-from: ${{ (github.event_name == 'workflow_dispatch' && inputs.execution_mode || 'self-hosted-buildkit') == 'github-runners' && 'type=registry,ref=ghcr.io/eduide/eduidec-landing-page:build-cache' || '' }}
+      cache-to: ${{ (github.event_name == 'workflow_dispatch' && inputs.execution_mode || 'self-hosted-buildkit') == 'github-runners' && 'type=registry,ref=ghcr.io/eduide/eduidec-landing-page:build-cache,mode=max,image-manifest=true,oci-mediatypes=true' || '' }}
       build-amd64: true
       build-arm64: ${{ github.event_name != 'pull_request' }}
-      cache-from: |
-        type=registry,ref=ghcr.io/ls1intum/edutheia-landing-page:${{ needs.determine-tag.outputs.cache_tag }}
-        type=registry,ref=ghcr.io/ls1intum/edutheia-landing-page:build-cache
-      cache-to: "type=registry,ref=ghcr.io/ls1intum/edutheia-landing-page:${{ needs.determine-tag.outputs.cache_tag }},mode=max"
+      network: host
     secrets: inherit
