@@ -30,7 +30,7 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
             The data controller within the meaning of the GDPR is the Technical University of Munich (TUM),
             represented by its President.
             For data protection enquiries please contact:
-            <strong> datenschutz(at)tum.de</strong>
+            <strong> beauftragter(at)datenschutz.tum.de</strong>
           </p>
         </div>
 
