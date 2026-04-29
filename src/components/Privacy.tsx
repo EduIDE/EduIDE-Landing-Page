@@ -23,7 +23,7 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
             Verantwortlich im Sinne der DSGVO ist die Technische Universität München (TUM),
             vertreten durch den Präsidenten.
             Bei datenschutzrechtlichen Fragen wenden Sie sich bitte an:
-            <strong> datenschutz(at)tum.de</strong>
+            <strong> beauftragter(at)datenschutz.tum.de</strong>
           </p>
           <hr className='privacy__lang-divider' />
           <p>
