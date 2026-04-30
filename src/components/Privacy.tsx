@@ -130,7 +130,7 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
           </ul>
         </div>
 
-<div className='privacy__card'>
+        <div className='privacy__card'>
           <h2>8. Betroffenenrechte / Your rights</h2>
           <p>
             Soweit wir personenbezogene Daten von Ihnen verarbeiten, stehen Ihnen als Betroffener folgende Rechte zu:

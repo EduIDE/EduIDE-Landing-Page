@@ -7,20 +7,20 @@ interface InfoProps {
 }
 
 export const Info: React.FC<InfoProps> = ({ usesLogin, disable, text, title }: InfoProps) => {
-    if (disable) {
-        // eslint-disable-next-line no-null/no-null
-        return null;
-    }
-    const calculatedTitle = title ?? (usesLogin ? 'Login & launch Session' : 'Launch session');
-    const calculatedText = text ?? (usesLogin ? DEFAULT_TEXT : DEFAULT_TEXT_NO_LOGIN);
-    return (
-        <div className='App__info-message'>
-            <h2>
-                <strong>{calculatedTitle}</strong>
-            </h2>
-            <p>{calculatedText}</p>
-        </div>
-    );
+  if (disable) {
+    // eslint-disable-next-line no-null/no-null
+    return null;
+  }
+  const calculatedTitle = title ?? (usesLogin ? 'Login & launch Session' : 'Launch session');
+  const calculatedText = text ?? (usesLogin ? DEFAULT_TEXT : DEFAULT_TEXT_NO_LOGIN);
+  return (
+    <div className='App__info-message'>
+      <h2>
+        <strong>{calculatedTitle}</strong>
+      </h2>
+      <p>{calculatedText}</p>
+    </div>
+  );
 };
 
 const DEFAULT_TEXT =
