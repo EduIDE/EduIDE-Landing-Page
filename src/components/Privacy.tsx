@@ -139,8 +139,6 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
             <li>Sie haben das Recht auf Auskunft (Art. 15 DSGVO).</li>
             <li>Werden unrichtige personenbezogene Daten verarbeitet, steht Ihnen ein Recht auf Berichtigung zu (Art. 16 DSGVO).</li>
             <li>Liegen die gesetzlichen Voraussetzungen vor, können Sie die Löschung oder Einschränkung der Verarbeitung verlangen (Art. 17 und 18 DSGVO).</li>
-            <li>Wenn Sie in die Verarbeitung eingewilligt haben oder ein Vertrag zur Datenverarbeitung besteht und die Datenverarbeitung mithilfe automatisierter Verfahren durchgeführt wird, steht Ihnen gegebenenfalls ein Recht auf Datenübertragbarkeit zu (Art. 20 DSGVO).</li>
-            <li>Sollten Sie in die Verarbeitung eingewilligt haben und die Verarbeitung auf dieser Einwilligung beruhen, können Sie die Einwilligung jederzeit für die Zukunft widerrufen. Die Rechtmäßigkeit der aufgrund der Einwilligung bis zum Widerruf erfolgten Datenverarbeitung wird hierdurch nicht berührt.</li>
           </ul>
 
           <hr className='privacy__lang-divider' />
@@ -152,8 +150,6 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
             <li>You have the right of access (Art. 15 GDPR).</li>
             <li>If incorrect personal data is processed, you have the right to rectification (Art. 16 GDPR).</li>
             <li>If the legal requirements are met, you may request the deletion or restriction of processing (Art. 17 and 18 GDPR).</li>
-            <li>If you have consented to the processing or if there is a contract for data processing and the data processing is carried out with the help of automated procedures, you may have a right to data portability (Art. 20 GDPR).</li>
-            <li>If you have consented to the processing and the processing is based on this consent, you can revoke the consent at any time for the future. The lawfulness of the data processing carried out on the basis of the consent until the revocation is not affected by it.</li>
           </ul>
         </div>
 
