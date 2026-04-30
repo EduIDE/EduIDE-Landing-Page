@@ -2,7 +2,6 @@
   "root": true,
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "tsconfigRootDir": ".",
     "project": "./tsconfig.json",
     "sourceType": "module",
     "ecmaVersion": 11,
@@ -98,7 +97,14 @@
       }
     ],
     "no-underscore-dangle": "off",
-    "quotes": "off",
+    "quotes": [
+      "error",
+      "single",
+      {
+        "avoidEscape": true
+      }
+    ],
+    "semi": ["error", "always"],
     "space-before-function-paren": [
       "error",
       {
@@ -128,14 +134,6 @@
         "args": "none"
       }
     ],
-    "@typescript-eslint/quotes": [
-      "error",
-      "single",
-      {
-        "avoidEscape": true
-      }
-    ],
-    "@typescript-eslint/semi": ["error", "always"],
     "brace-style": ["warn", "1tbs"],
     "comma-dangle": "warn",
     "indent": [
@@ -173,7 +171,6 @@
       }
     ],
     "@typescript-eslint/no-non-null-assertion": "off",
-    "@typescript-eslint/type-annotation-spacing": "warn",
     "import/export": "off",
     "import/no-deprecated": "error",
     "import/no-unresolved": [
