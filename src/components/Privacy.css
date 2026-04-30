@@ -100,7 +100,6 @@
     gap: 0.75rem;
 }
 
-
 .privacy__card h3 {
     color: var(--color-text-primary);
     font-size: 1.2rem;
@@ -157,7 +156,6 @@
     font-weight: bold;
     font-size: 1.1rem;
 }
-
 
 .privacy__details {
     display: flex;

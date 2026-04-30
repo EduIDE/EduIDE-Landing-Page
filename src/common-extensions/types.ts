@@ -71,11 +71,11 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
  * Handles both 'appId' (from npm package) and 'serviceAuthToken' (legacy)
  */
 export function getServiceAuthToken(config: TheiaCloudConfig | ExtendedTheiaCloudConfig | ExtendedAppDefinition): string {
-  if ('serviceAuthToken' in config && typeof config.serviceAuthToken === 'string') {
-    return config.serviceAuthToken;
-  }
-  if ('appId' in config && typeof config.appId === 'string') {
-    return config.appId;
-  }
-  throw new Error('Unable to extract service auth token from config');
+    if ('serviceAuthToken' in config && typeof config.serviceAuthToken === 'string') {
+        return config.serviceAuthToken;
+    }
+    if ('appId' in config && typeof config.appId === 'string') {
+        return config.appId;
+    }
+    throw new Error('Unable to extract service auth token from config');
 }

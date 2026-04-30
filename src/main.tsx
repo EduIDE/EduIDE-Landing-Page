@@ -10,9 +10,9 @@ import { initializeSentry } from './sentry';
 initializeSentry();
 
 createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ThemeProvider>
-      <App />
-    </ThemeProvider>
-  </React.StrictMode>
+    <React.StrictMode>
+        <ThemeProvider>
+            <App />
+        </ThemeProvider>
+    </React.StrictMode>
 );
