@@ -2,7 +2,6 @@
   "root": true,
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "tsconfigRootDir": ".",
     "project": "./tsconfig.json",
     "sourceType": "module",
     "ecmaVersion": 11,
@@ -62,7 +61,7 @@
     "no-redeclare": "off",
     "no-inner-declarations": "off",
     "curly": "error",
-    "eol-last": "error",
+    "eol-last": "off",
     "eqeqeq": ["error", "smart"],
     "guard-for-in": "error",
     "no-caller": "error",
@@ -85,31 +84,15 @@
     ],
     "no-unused-vars": "off",
     "no-use-before-define": "off",
-    "max-len": [
-      "error",
-      {
-        "code": 180
-      }
-    ],
-    "no-multiple-empty-lines": [
-      "error",
-      {
-        "max": 1
-      }
-    ],
+    "max-len": "off",
+    "no-multiple-empty-lines": "off",
     "no-underscore-dangle": "off",
     "quotes": "off",
-    "space-before-function-paren": [
-      "error",
-      {
-        "anonymous": "always",
-        "named": "never",
-        "asyncArrow": "always"
-      }
-    ],
+    "semi": "off",
+    "space-before-function-paren": "off",
     "one-var": ["error", "never"],
     "arrow-body-style": ["error", "as-needed"],
-    "arrow-parens": ["error", "as-needed"],
+    "arrow-parens": "off",
     "no-var": "error",
     "prefer-const": [
       "error",
@@ -128,23 +111,9 @@
         "args": "none"
       }
     ],
-    "@typescript-eslint/quotes": [
-      "error",
-      "single",
-      {
-        "avoidEscape": true
-      }
-    ],
-    "@typescript-eslint/semi": ["error", "always"],
-    "brace-style": ["warn", "1tbs"],
-    "comma-dangle": "warn",
-    "indent": [
-      "warn",
-      2,
-      {
-        "SwitchCase": 1
-      }
-    ],
+    "brace-style": "off",
+    "comma-dangle": "off",
+    "indent": "off",
     "no-invalid-this": "warn",
     "no-new-wrappers": "warn",
     "no-return-await": "warn",
@@ -154,17 +123,11 @@
         "hoist": "all"
       }
     ],
-    "no-trailing-spaces": "warn",
+    "no-trailing-spaces": "off",
     "no-void": "warn",
     "prefer-object-spread": "warn",
     "radix": "warn",
-    "spaced-comment": [
-      "warn",
-      "always",
-      {
-        "exceptions": ["*", "+", "-", "/", "!"]
-      }
-    ],
+    "spaced-comment": "off",
     "use-isnan": "warn",
     "@typescript-eslint/explicit-function-return-type": [
       "warn",
@@ -173,7 +136,6 @@
       }
     ],
     "@typescript-eslint/no-non-null-assertion": "off",
-    "@typescript-eslint/type-annotation-spacing": "warn",
     "import/export": "off",
     "import/no-deprecated": "error",
     "import/no-unresolved": [

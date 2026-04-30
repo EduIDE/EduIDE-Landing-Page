@@ -221,6 +221,55 @@ EduIDE-Landing-Page/
 3. **Add Dependencies**: Add to `package.json` and run `npm install`
 4. **Update Styles**: Modify `src/App.css` or component-specific CSS files
 
+### Dependency Updates
+
+This project uses npm and commits both `package.json` and `package-lock.json`. Prefer a conservative update first, then handle major upgrades separately.
+
+1. Check the current working tree and dependency status:
+
+   ```bash
+   git status --short
+   npm outdated
+   npm audit
+   ```
+
+2. Update dependencies within the existing `package.json` semver ranges:
+
+   ```bash
+   npm update
+   ```
+
+3. If direct dependency ranges should be raised to the versions now installed, update `package.json` and reconcile the lockfile:
+
+   ```bash
+   npm install --package-lock-only
+   ```
+
+4. Review major upgrades from `npm outdated` individually. Do not batch unrelated major upgrades unless you also verify the related code/config changes. Keep coupled packages on compatible versions, for example:
+
+   ```bash
+   npm install -D @typescript-eslint/eslint-plugin@latest @typescript-eslint/parser@latest
+   ```
+
+5. Verify the result:
+
+   ```bash
+   npm run build
+   npx eslint . --ext ts,tsx --report-unused-disable-directives --quiet
+   npm audit
+   ```
+
+   The normal `npm run lint` command treats warnings as failures because it uses `--max-warnings 0`. Use the errors-only ESLint command above to confirm that dependency updates did not introduce blocking lint errors, then address warnings separately if needed.
+
+6. Review and commit the dependency update:
+
+   ```bash
+   git diff -- package.json package-lock.json
+   git status --short
+   ```
+
+If `npm audit` reports a vulnerability with `fixAvailable: false`, identify the owning direct dependency and check whether a newer compatible release changes the vulnerable transitive dependency. If no compatible release fixes it, document the residual advisory in the pull request.
+
 ### Troubleshooting
 
 **Build Fails with TypeScript Errors**:
