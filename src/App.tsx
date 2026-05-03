@@ -5,7 +5,7 @@ import Keycloak, { KeycloakConfig } from 'keycloak-js';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { ExtendedAppDefinition, ExtendedTheiaCloudConfig } from './common-extensions/types';
-import { getServiceAuthToken } from './common-extensions/types';
+import { AppMode, getServiceAuthToken } from './common-extensions/types';
 import { AppLogo } from './components/AppLogo';
 import { ErrorComponent } from './components/ErrorComponent';
 import { Footer } from './components/Footer';
@@ -26,11 +26,16 @@ let initialAppDefinition = '';
 let keycloakConfig: KeycloakConfig | undefined = undefined;
 const WORKSPACE_SEGMENT_LIMIT = 12;
 
+const APP_MODES: { value: AppMode; label: string }[] = [
+    { value: AppMode.Standard, label: 'Standard' },
+    { value: AppMode.AI, label: '✦ AI' }
+];
+
 function createDeterministicId(value: string): string {
     let hash = 0;
 
     for (let i = 0; i < value.length; i += 1) {
-        hash = ((hash << 5) - hash) + value.charCodeAt(i);
+        hash = (hash << 5) - hash + value.charCodeAt(i);
         hash |= 0;
     }
 
@@ -111,6 +116,7 @@ function App(): JSX.Element {
     /* eslint-disable react-hooks/rules-of-hooks */
     const [selectedAppName, setSelectedAppName] = useState<string>(initialAppName);
     const [selectedAppDefinition, setSelectedAppDefinition] = useState<string>(initialAppDefinition);
+    const [appMode, setAppMode] = useState<AppMode>(AppMode.Standard);
 
     const [email, setEmail] = useState<string>();
     const [username, setUsername] = useState<string>();
@@ -263,11 +269,12 @@ function App(): JSX.Element {
                             workspaceUserSegment +
                             '-' +
                             createDeterministicId(`${workspaceUser}-${appDefinition}-playground`);
-                        console.log(
-                            `Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`
-                        );
+                        console.log(`Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`);
                     } else {
-                        const repoName = gitUri.split('/').pop()?.replace(/\.git$/, '');
+                        const repoName = gitUri
+                            .split('/')
+                            .pop()
+                            ?.replace(/\.git$/, '');
                         const repoSegment = sanitizeWorkspaceSegment(repoName, 'repo');
                         workspace =
                             'ws-' +
@@ -346,13 +353,7 @@ function App(): JSX.Element {
                         env: launchEnv
                     });
                     const createEphemeralLaunchRequest = (): LaunchRequest => ({
-                        ...LaunchRequest.ephemeral(
-                            config.serviceUrl,
-                            serviceAuthToken,
-                            appDefinition,
-                            undefined,
-                            launchUser
-                        ),
+                        ...LaunchRequest.ephemeral(config.serviceUrl, serviceAuthToken, appDefinition, undefined, launchUser),
                         env: launchEnv
                     });
 
@@ -378,22 +379,22 @@ function App(): JSX.Element {
                     // App definitions that require a shared workspace are retried with a PVC-backed workspace.
                     const launchPromise = config.useEphemeralStorage
                         ? (() => {
-                            console.log(`Attempting ephemeral launch for ${appDefinition}`);
-                            return TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions).catch((err: Error) => {
-                                if (!isWorkspaceRequiredFallbackError(err)) {
-                                    throw err;
-                                }
+                              console.log(`Attempting ephemeral launch for ${appDefinition}`);
+                              return TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions).catch((err: Error) => {
+                                  if (!isWorkspaceRequiredFallbackError(err)) {
+                                      throw err;
+                                  }
 
-                                console.log(
-                                    `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
-                                );
-                                return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
-                            });
-                        })()
+                                  console.log(
+                                      `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
+                                  );
+                                  return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
+                              });
+                          })()
                         : (() => {
-                            console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
-                            return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
-                        })();
+                              console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
+                              return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
+                          })();
 
                     launchPromise
                         .catch((err: Error) => {
@@ -526,7 +527,29 @@ function App(): JSX.Element {
                                             onStartSession={handleStartSession}
                                         />
                                     ) : (
-                                        <SelectApp appDefinitions={config.additionalApps} onStartSession={handleStartSession} />
+                                        <>
+                                            <div className='App__mode-selector'>
+                                                <div className='App__mode-selector-inner'>
+                                                    {APP_MODES.map(mode => (
+                                                        <button
+                                                            key={mode.value}
+                                                            className={`App__mode-selector-btn${
+                                                                appMode === mode.value ? ' App__mode-selector-btn--active' : ''
+                                                            }`}
+                                                            onClick={() => setAppMode(mode.value)}
+                                                            aria-pressed={appMode === mode.value}
+                                                        >
+                                                            {mode.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <SelectApp
+                                                appDefinitions={config.additionalApps}
+                                                onStartSession={handleStartSession}
+                                                appMode={appMode}
+                                            />
+                                        </>
                                     )}
                                 </div>
                             </div>
