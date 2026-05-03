@@ -13,13 +13,14 @@ window.theiaCloudConfig = {
       appId: "c-latest",
       appName: "C",
       buildSystems: [
-        { id: "makefile", label: "Makefile"}
+        { id: "makefile", label: "Makefile" }
       ]
     },
     {
-      appId: "java-17-latest", 
-      appName: "Java",
-      image: "java-17",
+      appId: 'java-17-latest',
+      appName: 'Java',
+      image: 'java-17',
+      aiVariant: 'java-17-ai-latest',
       buildSystems: [
         { id: "maven", label: "Maven" },
         { id: "gradle", label: "Gradle" },
@@ -29,28 +30,28 @@ window.theiaCloudConfig = {
       appId: "javascript-latest",
       appName: "Javascript",
       buildSystems: [
-        { id: "npm", label: "npm"}
+        { id: "npm", label: "npm" }
       ]
     },
     {
       appId: "ocaml-latest",
       appName: "Ocaml",
       buildSystems: [
-        { id: "dune", label: "Dune"}
+        { id: "dune", label: "Dune" }
       ]
     },
     {
       appId: "python-latest",
       appName: "Python",
       buildSystems: [
-        { id: "pip", label: "pip"}
+        { id: "pip", label: "pip" }
       ]
     },
     {
       appId: "rust-latest",
       appName: "Rust",
       buildSystems: [
-        { id: "cargo", label: "Cargo"}
+        { id: "cargo", label: "Cargo" }
       ]
     }
   ],
