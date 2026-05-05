@@ -34,17 +34,19 @@ function getAppLogoSrc(app: ExtendedAppDefinition): string {
 export const SelectApp: React.FC<SelectAppProps> = ({ appDefinitions, onSelectApp }: SelectAppProps) => (
     <div className='App__grid'>
         {appDefinitions &&
-            appDefinitions.map((app, index) => (
-                <button
-                    key={index}
-                    className='App__grid-item'
-                    onClick={() => onSelectApp(app.serviceAuthToken || app.appId, app.appName)}
-                    data-testid={`launch-app-${app.serviceAuthToken || app.appId}`}
-                >
-                    <img src={getAppLogoSrc(app)} alt={`${app.appName} logo`} className='App__grid-item-logo' />
-                    <div className='App__grid-item-launch'>Select</div>
-                    <div className='App__grid-item-text'>{app.appName}</div>
-                </button>
-            ))}
+            appDefinitions
+                .filter(app => app.visible !== false)
+                .map((app, index) => (
+                    <button
+                        key={index}
+                        className='App__grid-item'
+                        onClick={() => onSelectApp(app.serviceAuthToken || app.appId, app.appName)}
+                        data-testid={`launch-app-${app.serviceAuthToken || app.appId}`}
+                    >
+                        <img src={getAppLogoSrc(app)} alt={`${app.appName} logo`} className='App__grid-item-logo' />
+                        <div className='App__grid-item-launch'>Select</div>
+                        <div className='App__grid-item-text'>{app.appName}</div>
+                    </button>
+                ))}
     </div>
 );

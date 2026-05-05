@@ -51,6 +51,7 @@ export type ExtendedAppDefinition = AppDefinition & {
     buildSystems?: BuildSystemOption[];
     image?: string;
     Image?: string;
+    visible?: boolean;
 };
 
 /**

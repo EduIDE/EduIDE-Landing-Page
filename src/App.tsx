@@ -557,7 +557,7 @@ function isDefaultSelectionValueValid(defaultSelection: string, appDefinition: s
         return true;
     }
     if (additionalApps && additionalApps.length > 0) {
-        return additionalApps.map(def => def.serviceAuthToken).filter(serviceAuthToken => serviceAuthToken === defaultSelection).length > 0;
+        return additionalApps.some(def => def.serviceAuthToken === defaultSelection);
     }
     // If there are no additional apps explicitly configured, we accept any app definition given via url parameter
     return true;
