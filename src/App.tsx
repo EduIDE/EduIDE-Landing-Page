@@ -2,7 +2,7 @@ import './App.css';
 
 import { getTheiaCloudConfig, LaunchRequest, PingRequest, RequestOptions, TheiaCloud } from '@eclipse-theiacloud/common';
 import Keycloak, { KeycloakConfig } from 'keycloak-js';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ExtendedAppDefinition, ExtendedTheiaCloudConfig } from './common-extensions/types';
 import { getServiceAuthToken } from './common-extensions/types';
@@ -126,6 +126,7 @@ function App(): JSX.Element {
     const [artemisUrl, setArtemisUrl] = useState<string>();
 
     const [autoStart, setAutoStart] = useState<boolean>(false);
+    const autoStartRequestedRef = useRef(false);
 
     const [standaloneWizardStep, setStandaloneWizardStep] = useState<'language' | 'buildSystem'>('language');
     const [standaloneAppDef, setStandaloneAppDef] = useState<string>();
@@ -423,17 +424,22 @@ function App(): JSX.Element {
         }
 
         if (config.useKeycloak && !username) {
+            autoStartRequestedRef.current = false;
             return;
         }
 
-        if (selectedAppDefinition && gitUri && artemisToken && !loading) {
+        if (selectedAppDefinition && gitUri && artemisToken) {
             // authenticate();
             setAutoStart(true);
-            handleStartSession(selectedAppDefinition);
+            if (!autoStartRequestedRef.current) {
+                autoStartRequestedRef.current = true;
+                handleStartSession(selectedAppDefinition);
+            }
         } else {
+            autoStartRequestedRef.current = false;
             setAutoStart(false);
         }
-    }, [username, user, selectedAppDefinition, gitUri, artemisToken, loading, handleStartSession, config.useKeycloak]);
+    }, [username, user, selectedAppDefinition, gitUri, artemisToken, handleStartSession, config.useKeycloak]);
 
     /* eslint-enable react-hooks/rules-of-hooks */
 
