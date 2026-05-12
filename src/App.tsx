@@ -411,7 +411,7 @@ function App(): JSX.Element {
     const handleAppSelected = (appId: string, _: string): void => {
         const isStandaloneMode = !artemisToken && !gitUri;
         if (isStandaloneMode) {
-            const appDef = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appId);
+            const appDef = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appId || a.aiVariant === appId);
             const buildSystems = appDef?.buildSystems ?? [];
             if (buildSystems.length <= 1) {
                 handleStartSession(appId, buildSystems.length === 1 ? buildSystems[0].id : undefined);
@@ -506,7 +506,8 @@ function App(): JSX.Element {
     }
 
     const standaloneAppBuildSystems =
-        config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === standaloneAppDef)?.buildSystems ?? [];
+        config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === standaloneAppDef || a.aiVariant === standaloneAppDef)
+            ?.buildSystems ?? [];
 
     return (
         <div className='App'>
