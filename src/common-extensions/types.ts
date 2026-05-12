@@ -2,49 +2,48 @@
  * Local type extensions for @eclipse-theiacloud/common
  * These extend the npm package types with EduIDE-specific functionality
  */
+import type { AppDefinition, TheiaCloudConfig } from '@eclipse-theiacloud/common';
 
 export enum AppMode {
-    Standard = 'standard',
-    AI = 'ai'
+  Standard = 'standard',
+  AI = 'ai'
 }
-
-import type { AppDefinition, TheiaCloudConfig } from '@eclipse-theiacloud/common';
 
 /**
  * Footer link configuration structure
  */
 export interface FooterLinksConfig {
-    attribution?: {
-        text?: string;
-        url?: string;
-        version?: string;
-    };
-    bugReport?: {
-        text: string;
-        url: string;
-        target?: string;
-        rel?: string;
-    };
-    featureRequest?: {
-        text: string;
-        url: string;
-        target?: string;
-        rel?: string;
-    };
-    about?: {
-        text: string;
-        url: string;
-        target?: string;
-        rel?: string;
-    };
+  attribution?: {
+    text?: string;
+    url?: string;
+    version?: string;
+  };
+  bugReport?: {
+    text: string;
+    url: string;
+    target?: string;
+    rel?: string;
+  };
+  featureRequest?: {
+    text: string;
+    url: string;
+    target?: string;
+    rel?: string;
+  };
+  about?: {
+    text: string;
+    url: string;
+    target?: string;
+    rel?: string;
+  };
 }
 
 /**
  * A single build system option for a language app
  */
 export interface BuildSystemOption {
-    id: string;
-    label: string;
+  id: string;
+  label: string;
 }
 
 /**
@@ -52,12 +51,12 @@ export interface BuildSystemOption {
  * Bridges the gap between the package's ServiceConfig and legacy usage
  */
 export type ExtendedAppDefinition = AppDefinition & {
-    serviceAuthToken?: string;
-    buildSystems?: BuildSystemOption[];
-    image?: string;
-    Image?: string;
-    visible?: boolean;
-    aiVariant?: string;
+  serviceAuthToken?: string;
+  buildSystems?: BuildSystemOption[];
+  image?: string;
+  Image?: string;
+  visible?: boolean;
+  aiVariant?: string;
 };
 
 /**
@@ -65,12 +64,12 @@ export type ExtendedAppDefinition = AppDefinition & {
  * Uses intersection type since TheiaCloudConfig is a type alias
  */
 export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> & {
-    additionalApps?: ExtendedAppDefinition[];
-    footerLinks?: FooterLinksConfig;
-    pageTitle?: string;
-    sentryEnable?: boolean;
-    sentryEnvironment?: string;
-    sentryDsn?: string;
+  additionalApps?: ExtendedAppDefinition[];
+  footerLinks?: FooterLinksConfig;
+  pageTitle?: string;
+  sentryEnable?: boolean;
+  sentryEnvironment?: string;
+  sentryDsn?: string;
 };
 
 /**
@@ -78,11 +77,11 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
  * Handles both 'appId' (from npm package) and 'serviceAuthToken' (legacy)
  */
 export function getServiceAuthToken(config: TheiaCloudConfig | ExtendedTheiaCloudConfig | ExtendedAppDefinition): string {
-    if ('serviceAuthToken' in config && typeof config.serviceAuthToken === 'string') {
-        return config.serviceAuthToken;
-    }
-    if ('appId' in config && typeof config.appId === 'string') {
-        return config.appId;
-    }
-    throw new Error('Unable to extract service auth token from config');
+  if ('serviceAuthToken' in config && typeof config.serviceAuthToken === 'string') {
+    return config.serviceAuthToken;
+  }
+  if ('appId' in config && typeof config.appId === 'string') {
+    return config.appId;
+  }
+  throw new Error('Unable to extract service auth token from config');
 }
