@@ -50,7 +50,7 @@ jobs:
       docker-file: Dockerfile
       image-name: eduide/eduidec-landing-page
       docker-context: .
-      image-tag: ${{ inputs.image_tag || '' }}
+      image-tag: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.image_tag || '' }}
       execution-mode: ${{ github.event_name == 'workflow_dispatch' && inputs.execution_mode || 'self-hosted-buildkit' }}
       arc-registry-cache: ${{ github.event_name == 'workflow_dispatch' && inputs.arc_registry_cache || false }}
       no-cache: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.disable_layer_cache) || false }}
