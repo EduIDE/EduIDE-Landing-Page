@@ -9,6 +9,10 @@ on:
       - main
   schedule:
     - cron: '0 2 * * *'
+  release:
+    types:
+      - published
+      - prereleased
   workflow_dispatch:
     inputs:
       execution_mode:
