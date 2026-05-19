@@ -149,12 +149,10 @@ function App(): JSX.Element {
             ) {
                 if (config.additionalApps && config.additionalApps.length > 0) {
                     const appDefinition = config.additionalApps.find(
-                        appDef => (appDef.serviceAuthToken || appDef.appId) === pathBlueprintSelection
+                        appDef => (appDef.serviceAuthToken || appDef.appId) === pathBlueprintSelection || appDef.aiVariant === pathBlueprintSelection
                     );
                     setSelectedAppName(appDefinition ? appDefinition.appName : pathBlueprintSelection);
-                    setSelectedAppDefinition(
-                        appDefinition ? appDefinition.serviceAuthToken || appDefinition.appId : pathBlueprintSelection
-                    );
+                    setSelectedAppDefinition(pathBlueprintSelection);
                 } else {
                     setSelectedAppDefinition(pathBlueprintSelection);
                     setSelectedAppName(pathBlueprintSelection);
@@ -592,7 +590,7 @@ function isDefaultSelectionValueValid(defaultSelection: string, appDefinition: s
         return true;
     }
     if (additionalApps && additionalApps.length > 0) {
-        return additionalApps.some(def => def.serviceAuthToken === defaultSelection);
+        return additionalApps.some(def => (def.serviceAuthToken || def.appId) === defaultSelection || def.aiVariant === defaultSelection);
     }
     // If there are no additional apps explicitly configured, we accept any app definition given via url parameter
     return true;
