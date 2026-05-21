@@ -124,6 +124,7 @@ function App(): JSX.Element {
     const [gitMail, setGitMail] = useState<string>();
     const [artemisToken, setArtemisToken] = useState<string>();
     const [artemisUrl, setArtemisUrl] = useState<string>();
+    const [openaiApiKey, setOpenaiApiKey] = useState<string>();
 
     const [autoStart, setAutoStart] = useState<boolean>(false);
     const autoStartRequestedRef = useRef(false);
@@ -180,6 +181,19 @@ function App(): JSX.Element {
             const artemisUrlParam = urlParams.get('artemisUrl');
             if (artemisUrlParam) {
                 setArtemisUrl(artemisUrlParam);
+            }
+        }
+
+        // Get openaiApiKey parameter from URL.
+        if (urlParams.has('openaiApiKey')) {
+            const openaiApiKeyParam = urlParams.get('openaiApiKey');
+            if (openaiApiKeyParam) {
+                setOpenaiApiKey(openaiApiKeyParam);
+            }
+        } else if (urlParams.has('openApiKey')) {
+            const openApiKeyParam = urlParams.get('openApiKey');
+            if (openApiKeyParam) {
+                setOpenaiApiKey(openApiKeyParam);
             }
         }
 
@@ -311,6 +325,9 @@ function App(): JSX.Element {
                     if (buildSystemId) {
                         envFromMap.TEMPLATE = buildSystemId;
                     }
+                    if (openaiApiKey) {
+                        envFromMap.OPENAI_API_KEY = openaiApiKey;
+                    }
 
                     const launchEnv = { fromMap: envFromMap };
                     const launchUser = config.useKeycloak ? email! : user!;
@@ -399,7 +416,7 @@ function App(): JSX.Element {
                     setLoading(false);
                 });
         },
-        [config, gitUri, username, user, token, artemisToken, artemisUrl, gitUser, gitMail, email]
+        [config, gitUri, username, user, token, artemisToken, artemisUrl, gitUser, gitMail, email, openaiApiKey]
     );
 
     const handleAppSelected = (appId: string, _: string): void => {
