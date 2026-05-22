@@ -257,7 +257,11 @@ function App(): JSX.Element {
                     let workspace: string;
                     const workspaceUser = config.useKeycloak ? username : user;
                     const workspaceUserSegment = sanitizeWorkspaceSegment(workspaceUser, 'user');
-                    const workspaceAppSegment = sanitizeWorkspaceSegment(appDefinition, 'app');
+                    // Fold the selected build system (template) into the workspace identity so
+                    // that, e.g., the Bazel and Make variants of the same app definition get
+                    // separate persistent workspaces instead of sharing (and merging) one.
+                    const appKey = buildSystemId ? `${appDefinition}-${buildSystemId}` : appDefinition;
+                    const workspaceAppSegment = sanitizeWorkspaceSegment(appKey, 'app');
 
                     if (!gitUri) {
                         workspace =
@@ -266,7 +270,7 @@ function App(): JSX.Element {
                             '-playground-' +
                             workspaceUserSegment +
                             '-' +
-                            createDeterministicId(`${workspaceUser}-${appDefinition}-playground`);
+                            createDeterministicId(`${workspaceUser}-${appKey}-playground`);
                         console.log(`Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`);
                     } else {
                         const repoName = gitUri
@@ -282,7 +286,7 @@ function App(): JSX.Element {
                             '-' +
                             workspaceUserSegment +
                             '-' +
-                            createDeterministicId(gitUri);
+                            createDeterministicId(`${gitUri}${buildSystemId ? `-${buildSystemId}` : ''}`);
                         console.log(`Prepared persistent workspace ${workspace} for ${appDefinition}`);
                     }
 
