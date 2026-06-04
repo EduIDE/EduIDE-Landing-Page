@@ -11,6 +11,9 @@ npm install
 # Type-check only (no emit)
 npm run ts:check
 
+# Run tests (node:test, no extra dependencies)
+npm test
+
 # Development server with hot reload
 npm run dev
 

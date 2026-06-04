@@ -36,8 +36,8 @@ function payloadFromFlatForm(fields: Record<string, string | string[]>): LaunchP
     }
 
     return {
-        git: Object.keys(git).length > 0 ? git : undefined,
-        parameters: Object.keys(parameters).length > 0 ? parameters : undefined,
+        ...(Object.keys(git).length > 0 ? { git } : {}),
+        ...(Object.keys(parameters).length > 0 ? { parameters } : {}),
     };
 }
 
