@@ -19,6 +19,7 @@ import { Privacy } from './components/Privacy';
 import { SelectApp } from './components/SelectApp';
 import { SelectBuildSystem } from './components/SelectBuildSystem';
 import { VantaBackground } from './components/VantaBackground';
+import { clearLaunchCookie, GIT_FIELD_NAMES, readLaunchCookie, resolveLaunchValue } from './launchParameters';
 
 // global state to be kept between render calls
 let initialized = false;
@@ -122,8 +123,12 @@ function App(): JSX.Element {
     const [gitUri, setGitUri] = useState<string>();
     const [gitUser, setGitUser] = useState<string>();
     const [gitMail, setGitMail] = useState<string>();
+    const [gitToken, setGitToken] = useState<string>();
     const [artemisToken, setArtemisToken] = useState<string>();
     const [artemisUrl, setArtemisUrl] = useState<string>();
+    // Extra key-value pairs from cookie.parameters that are not known control keys.
+    // They are forwarded as additional container env vars at session launch.
+    const [extraEnv, setExtraEnv] = useState<Record<string, string>>({});
 
     const [autoStart, setAutoStart] = useState<boolean>(false);
     const autoStartRequestedRef = useRef(false);
@@ -134,16 +139,49 @@ function App(): JSX.Element {
     if (!initialized) {
         const urlParams = new URLSearchParams(window.location.search);
 
-        // Get appDef parameter from URL and set it as the default selection
-        if (urlParams.has('appDef') || urlParams.has('appdef')) {
-            const pathBlueprintSelection = urlParams.get('appDef') || urlParams.get('appdef');
+        // Read the launch cookie set by the landing backend after an Artemis POST.
+        // The cookie carries { git?, parameters? } and allows secrets to travel via a
+        // POST body + cookie rather than the URL query string.
+        // When absent (legacy deep-link flow), all values fall back to URLSearchParams.
+        const cookie = readLaunchCookie();
+        // Merge git and parameters sections into a single flat map so that
+        // resolveLaunchValue can look up any key with one call.
+        // Git section is spread last so it wins when the same key appears in both.
+        const cookieMap: Record<string, string> = {
+            ...(cookie?.parameters ?? {}),
+            ...(cookie?.git ?? {}),
+        };
+
+        // Keys explicitly consumed below. Everything else in cookie.parameters is
+        // forwarded as extra container env vars (generic passthrough).
+        const knownParameterKeys = new Set([
+            'appDef', 'appdef', 'artemisUrl', 'artemisToken', 'user',
+            ...GIT_FIELD_NAMES,
+        ]);
+        if (cookie?.parameters) {
+            const extra: Record<string, string> = {};
+            for (const [k, v] of Object.entries(cookie.parameters)) {
+                if (!knownParameterKeys.has(k)) {
+                    extra[k] = v;
+                }
+            }
+            if (Object.keys(extra).length > 0) {
+                setExtraEnv(extra);
+            }
+        }
+
+        // Get appDef parameter and set it as the default selection.
+        // Cookie is preferred; URL params are the backward-compatible fallback.
+        const pathBlueprintSelection =
+            resolveLaunchValue('appDef', cookieMap, urlParams) ??
+            resolveLaunchValue('appdef', cookieMap, urlParams);
+        if (pathBlueprintSelection) {
             if (
-                pathBlueprintSelection &&
                 isDefaultSelectionValueValid(pathBlueprintSelection, config.appDefinition, config.additionalApps)
             ) {
                 if (config.additionalApps && config.additionalApps.length > 0) {
                     const appDefinition = config.additionalApps.find(
-                        appDef => (appDef.serviceAuthToken || appDef.appId) === pathBlueprintSelection
+                        (appDef: ExtendedAppDefinition) => (appDef.serviceAuthToken || appDef.appId) === pathBlueprintSelection
                     );
                     setSelectedAppName(appDefinition ? appDefinition.appName : pathBlueprintSelection);
                     setSelectedAppDefinition(
@@ -159,56 +197,38 @@ function App(): JSX.Element {
             }
         }
 
-        // Get gitUri parameter from URL.
-        if (urlParams.has('gitUri')) {
-            const gitUriParam = urlParams.get('gitUri');
-            if (gitUriParam) {
-                setGitUri(gitUriParam);
-            }
-        }
+        // Get gitUri parameter.
+        const gitUriParam = resolveLaunchValue('gitUri', cookieMap, urlParams);
+        if (gitUriParam) setGitUri(gitUriParam);
 
-        // Get artemisToken parameter from URL.
-        if (urlParams.has('artemisToken')) {
-            const artemisTokenParam = urlParams.get('artemisToken');
-            if (artemisTokenParam) {
-                setArtemisToken(artemisTokenParam);
-            }
-        }
+        // Get artemisToken parameter.
+        const artemisTokenParam = resolveLaunchValue('artemisToken', cookieMap, urlParams);
+        if (artemisTokenParam) setArtemisToken(artemisTokenParam);
 
-        // Get artemisUrl parameter from URL.
-        if (urlParams.has('artemisUrl')) {
-            const artemisUrlParam = urlParams.get('artemisUrl');
-            if (artemisUrlParam) {
-                setArtemisUrl(artemisUrlParam);
-            }
-        }
+        // Get artemisUrl parameter.
+        const artemisUrlParam = resolveLaunchValue('artemisUrl', cookieMap, urlParams);
+        if (artemisUrlParam) setArtemisUrl(artemisUrlParam);
 
-        // Get gitUser parameter from URL.
-        if (urlParams.has('gitUser')) {
-            const gitUserParam = urlParams.get('gitUser');
-            if (gitUserParam) {
-                setGitUser(gitUserParam);
-            }
-        }
+        // Get gitUser parameter.
+        const gitUserParam = resolveLaunchValue('gitUser', cookieMap, urlParams);
+        if (gitUserParam) setGitUser(gitUserParam);
 
-        // Get gitMail parameter from URL.
-        if (urlParams.has('gitMail')) {
-            const gitMailParam = urlParams.get('gitMail');
-            if (gitMailParam) {
-                setGitMail(gitMailParam);
-            }
-        }
+        // Get gitMail parameter.
+        const gitMailParam = resolveLaunchValue('gitMail', cookieMap, urlParams);
+        if (gitMailParam) setGitMail(gitMailParam);
 
-        // Get user parameter from URL (for anonymous mode when Keycloak is disabled).
-        if (urlParams.has('user')) {
-            const userParam = urlParams.get('user');
-            if (userParam) {
-                setUser(userParam);
-            }
-        }
+        // Get gitToken parameter. The README documented this key but the code never
+        // read it from URL params. It is now read from the cookie's git section and,
+        // for backward compatibility, from the URL as well.
+        const gitTokenParam = resolveLaunchValue('gitToken', cookieMap, urlParams);
+        if (gitTokenParam) setGitToken(gitTokenParam);
+
+        // Get user parameter (for anonymous mode when Keycloak is disabled).
+        const userParam = resolveLaunchValue('user', cookieMap, urlParams);
+        if (userParam) setUser(userParam);
 
         // Set default user for anonymous mode when Keycloak is disabled
-        if (!config.useKeycloak && !urlParams.has('user')) {
+        if (!config.useKeycloak && !userParam) {
             const randomId = Math.random().toString(36).substring(2, 10);
             setUser(`anonymous-${randomId}`);
         }
@@ -312,9 +332,15 @@ function App(): JSX.Element {
                     if (gitMail) {
                         envFromMap.GIT_MAIL = gitMail;
                     }
+                    if (gitToken) {
+                        envFromMap.GIT_TOKEN = gitToken;
+                    }
                     if (buildSystemId) {
                         envFromMap.TEMPLATE = buildSystemId;
                     }
+                    // Forward any extra key-value pairs received via the cookie's
+                    // parameters section as additional container env vars.
+                    Object.assign(envFromMap, extraEnv);
 
                     const launchEnv = { fromMap: envFromMap };
                     const launchUser = config.useKeycloak ? email! : user!;
@@ -358,6 +384,7 @@ function App(): JSX.Element {
                     // Template launches always use workspace-backed sessions so that env vars
                     // are set directly on the container (eager/ephemeral sessions inject env
                     // vars via data bridge which arrives after the entrypoint has already run).
+                    clearLaunchCookie();
                     const launchPromise =
                         config.useEphemeralStorage && !buildSystemId
                             ? (() => {
@@ -403,7 +430,7 @@ function App(): JSX.Element {
                     setLoading(false);
                 });
         },
-        [config, gitUri, username, user, token, artemisToken, artemisUrl, gitUser, gitMail, email]
+        [config, gitUri, username, user, token, artemisToken, artemisUrl, gitUser, gitMail, gitToken, email, extraEnv]
     );
 
     const handleAppSelected = (appId: string, _: string): void => {
