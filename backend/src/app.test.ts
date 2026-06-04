@@ -12,6 +12,9 @@ interface ParsedCookie {
     domain?: string;
 }
 
+// Minimal Set-Cookie header parser used to assert on individual cookie attributes.
+// Uses indexOf('=') rather than split('=') so that base64-padded or URL-encoded
+// values containing literal '=' characters are captured whole.
 function parseCookie(header: string): ParsedCookie {
     const [nameValue = '', ...rest] = header.split('; ');
     const eqPos = nameValue.indexOf('=');

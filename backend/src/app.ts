@@ -25,6 +25,8 @@ function payloadFromFlatForm(fields: Record<string, string | string[]>): LaunchP
 
     for (const [key, value] of Object.entries(fields)) {
         if (key === "payload") continue;
+        // parseBody({ all: true }) returns an array when a field appears more than once;
+        // take the first occurrence and ignore duplicates.
         const scalar = Array.isArray(value) ? value[0] : value;
         if (scalar === undefined || scalar === "") continue;
 
@@ -35,6 +37,10 @@ function payloadFromFlatForm(fields: Record<string, string | string[]>): LaunchP
         }
     }
 
+    // Spread rather than { git: ..., parameters: ... } so that empty sections are
+    // absent from the object entirely, not present as undefined. JSON.stringify
+    // would strip undefined either way, but arktype validates the object before
+    // serialization and treats an absent key differently from an explicit undefined.
     return {
         ...(Object.keys(git).length > 0 ? { git } : {}),
         ...(Object.keys(parameters).length > 0 ? { parameters } : {}),
@@ -61,6 +67,9 @@ async function parsePayload(c: Context): Promise<LaunchPayload | { error: string
     // Form submission (application/x-www-form-urlencoded or multipart/form-data)
     let fields: Record<string, string | string[]>;
     try {
+        // { all: true } collects repeated field names into arrays instead of
+        // silently keeping only the last value — safe even if callers send
+        // each field exactly once.
         fields = await c.req.parseBody({ all: true });
     } catch {
         return { error: "Could not parse form body" };
