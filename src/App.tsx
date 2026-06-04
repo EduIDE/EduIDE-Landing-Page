@@ -340,7 +340,14 @@ function App(): JSX.Element {
                     }
                     // Forward any extra key-value pairs received via the cookie's
                     // parameters section as additional container env vars.
-                    Object.assign(envFromMap, extraEnv);
+                    // Use a safe loop to avoid overriding already-set reserved keys
+                    // and to reject dangerous prototype-pollution key names.
+                    const DANGEROUS_ENV_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+                    for (const [k, v] of Object.entries(extraEnv)) {
+                        if (!DANGEROUS_ENV_KEYS.has(k) && !Object.prototype.hasOwnProperty.call(envFromMap, k)) {
+                            envFromMap[k] = v;
+                        }
+                    }
 
                     const launchEnv = { fromMap: envFromMap };
                     const launchUser = config.useKeycloak ? email! : user!;

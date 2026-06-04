@@ -15,16 +15,18 @@ const log = {
     debug: (msg: string) => console.debug(`[DEBUG] [${new Date().toISOString()}] ${msg}`),
 };
 
+const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 // Re-construct a LaunchPayload from a flat form submission where each field is
 // either a known git key (gitUri, gitUser, gitMail, gitToken) or a parameter.
 // This lets Artemis use plain <input type="hidden" name="gitUri" value="..."> fields
 // without having to JSON-serialize anything.
 function payloadFromFlatForm(fields: Record<string, string | string[]>): LaunchPayload {
-    const git: Record<string, string> = {};
-    const parameters: Record<string, string> = {};
+    const git: Record<string, string> = Object.create(null) as Record<string, string>;
+    const parameters: Record<string, string> = Object.create(null) as Record<string, string>;
 
     for (const [key, value] of Object.entries(fields)) {
-        if (key === "payload") continue;
+        if (key === "payload" || DANGEROUS_KEYS.has(key)) continue;
         // parseBody({ all: true }) returns an array when a field appears more than once;
         // take the first occurrence and ignore duplicates.
         const scalar = Array.isArray(value) ? value[0] : value;
@@ -144,7 +146,10 @@ export function createApp(): Hono {
     // Error handler
     app.onError((err, c) => {
         log.error("Internal server error", err);
-        return c.json({ error: "Internal server error", message: err.message }, 500);
+        const body = config.isProd
+            ? { error: "Internal server error" }
+            : { error: "Internal server error", message: err.message };
+        return c.json(body, 500);
     });
 
     return app;

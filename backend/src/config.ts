@@ -25,6 +25,7 @@ function getCookieMaxAge(): number {
 }
 
 export const config = {
+    isProd: process.env.NODE_ENV === "production",
     port: getPort(),
     // Where to redirect the browser after storing the cookie.
     // Set to the public URL of the landing page (e.g. "https://eduidec.example.com/").

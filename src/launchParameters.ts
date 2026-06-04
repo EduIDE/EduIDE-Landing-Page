@@ -37,7 +37,17 @@ export function readLaunchCookie(): LaunchCookie | undefined {
 // Called once the session launch has been initiated so the credentials are not
 // left in the browser beyond their useful life.
 export function clearLaunchCookie(): void {
-    document.cookie = `${COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    const base = `${COOKIE_NAME}=; Max-Age=0; Path=/; SameSite=Lax`;
+    // Host-only deletion (covers the common case where COOKIE_DOMAIN is unset).
+    document.cookie = base;
+    // If the backend was configured with COOKIE_DOMAIN (e.g. ".example.com" to share
+    // the cookie across subdomains), the host-only deletion above won't remove it.
+    // Also attempt deletion scoped to the inferred parent domain to cover that case.
+    const parts = document.location.hostname.split(".");
+    if (parts.length >= 2) {
+        const rootDomain = parts.slice(-2).join(".");
+        document.cookie = `${base}; Domain=${rootDomain}`;
+    }
 }
 
 // Return the value for a given key, preferring the cookie over the URL.
@@ -49,7 +59,7 @@ export function resolveLaunchValue(
     cookieMap: Record<string, string>,
     urlParams: URLSearchParams,
 ): string | null {
-    if (key in cookieMap) {
+    if (Object.prototype.hasOwnProperty.call(cookieMap, key)) {
         return cookieMap[key] ?? null;
     }
     return urlParams.get(key);
