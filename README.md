@@ -143,9 +143,10 @@ The landing page supports various URL query parameters to pre-configure the sess
 | `gitUri` | string | Git repository URL to clone |
 | `gitUser` | string | Git username for authentication |
 | `gitMail` | string | Git email for authentication |
-| `gitToken` | string | Git authentication token |
 | `artemisUrl` | string | Artemis service URL |
 | `artemisToken` | string | Artemis authentication token |
+
+**Auto-clone and private repositories:** On session start the repository is cloned from `gitUri` exactly as provided; no credential is added. For a private repository the credential must be embedded in `gitUri` itself, for example `https://<user>:<token>@host/org/repo.git`. A plain `gitUri` without embedded credentials only works for public repositories. Because `gitUri` may contain a token, treat the URL as sensitive.
 
 Example: `https://your-landing-page.com/?appDef=myapp&gitUri=https://github.com/user/repo.git`
 
