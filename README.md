@@ -83,12 +83,21 @@ window.theiaCloudConfig = {
   loadingText: "Loading your workspace...",
   logoFileExtension: "png",
   pageTitle: "EduIDE Cloud",
+  sentryEnable: true,
+  sentryEnvironment: "production",
+  // Optional override. If omitted, the default EduIDE Sentry DSN is used.
+  sentryDsn: "https://examplePublicKey@sentry.example.com/123",
 
   // Additional apps to display
   additionalApps: [
     {
       serviceAuthToken: "app1-token",
       appName: "Python Environment"
+    },
+    {
+      serviceAuthToken: "java-17-no-ls",
+      appName: "Java 17 No-LS",
+      image: "java-17"
     }
   ]
 };
@@ -112,8 +121,17 @@ window.theiaCloudConfig = {
 | `infoText` | string | No | Info banner text |
 | `loadingText` | string | No | Loading message text |
 | `logoFileExtension` | string | No | Logo file extension (png, svg, etc.) |
+| `sentryEnable` | boolean | No | Enable Sentry browser monitoring |
+| `sentryEnvironment` | string | No | Sentry environment tag, e.g. namespace or deployment name |
+| `sentryDsn` | string | No | Override the default EduIDE Sentry DSN |
 | `additionalApps` | array | No | Additional apps to display |
 | `footerLinks` | object | No | Footer link configuration |
+
+Each entry in `additionalApps` may optionally include `image` (or `Image` for compatibility). When omitted, the landing page keeps the current behavior and derives the logo path from `appName`. Apps may also set `visible: false` to stay launchable through direct `appDef` URLs without appearing on the landing page. Visibility defaults to true and does not need to be configured for visible apps. When provided, the landing page uses the image value like this:
+
+- Plain name like `java-17` becomes `/assets/logos/java-17-logo.png`
+- Filename like `java-17-logo.png` becomes `/assets/logos/java-17-logo.png`
+- Absolute path like `/custom/logo.png` is used as-is
 
 ## Query Parameters
 
@@ -125,9 +143,10 @@ The landing page supports various URL query parameters to pre-configure the sess
 | `gitUri` | string | Git repository URL to clone |
 | `gitUser` | string | Git username for authentication |
 | `gitMail` | string | Git email for authentication |
-| `gitToken` | string | Git authentication token |
 | `artemisUrl` | string | Artemis service URL |
 | `artemisToken` | string | Artemis authentication token |
+
+**Auto-clone and private repositories:** On session start the repository is cloned from `gitUri` exactly as provided; no credential is added. For a private repository the credential must be embedded in `gitUri` itself, for example `https://<user>:<token>@host/org/repo.git`. A plain `gitUri` without embedded credentials only works for public repositories. Because `gitUri` may contain a token, treat the URL as sensitive.
 
 Example: `https://your-landing-page.com/?appDef=myapp&gitUri=https://github.com/user/repo.git`
 
@@ -202,6 +221,55 @@ EduIDE-Landing-Page/
 2. **Update Configuration**: Modify `public/config.js` for runtime changes
 3. **Add Dependencies**: Add to `package.json` and run `npm install`
 4. **Update Styles**: Modify `src/App.css` or component-specific CSS files
+
+### Dependency Updates
+
+This project uses npm and commits both `package.json` and `package-lock.json`. Prefer a conservative update first, then handle major upgrades separately.
+
+1. Check the current working tree and dependency status:
+
+   ```bash
+   git status --short
+   npm outdated
+   npm audit
+   ```
+
+2. Update dependencies within the existing `package.json` semver ranges:
+
+   ```bash
+   npm update
+   ```
+
+3. If direct dependency ranges should be raised to the versions now installed, update `package.json` and reconcile the lockfile:
+
+   ```bash
+   npm install --package-lock-only
+   ```
+
+4. Review major upgrades from `npm outdated` individually. Do not batch unrelated major upgrades unless you also verify the related code/config changes. Keep coupled packages on compatible versions, for example:
+
+   ```bash
+   npm install -D @typescript-eslint/eslint-plugin@latest @typescript-eslint/parser@latest
+   ```
+
+5. Verify the result:
+
+   ```bash
+   npm run build
+   npx eslint . --ext ts,tsx --report-unused-disable-directives --quiet
+   npm audit
+   ```
+
+   The normal `npm run lint` command treats warnings as failures because it uses `--max-warnings 0`. Use the errors-only ESLint command above to confirm that dependency updates did not introduce blocking lint errors, then address warnings separately if needed.
+
+6. Review and commit the dependency update:
+
+   ```bash
+   git diff -- package.json package-lock.json
+   git status --short
+   ```
+
+If `npm audit` reports a vulnerability with `fixAvailable: false`, identify the owning direct dependency and check whether a newer compatible release changes the vulnerable transitive dependency. If no compatible release fixes it, document the residual advisory in the pull request.
 
 ### Troubleshooting
 
