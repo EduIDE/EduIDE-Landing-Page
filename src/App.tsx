@@ -19,6 +19,7 @@ import { Privacy } from './components/Privacy';
 import { SelectApp } from './components/SelectApp';
 import { SelectBuildSystem } from './components/SelectBuildSystem';
 import { VantaBackground } from './components/VantaBackground';
+import { giteaCheckSso, giteaLogin, initGitea, restoreGiteaRedirectSearch } from './gitea-oidc';
 
 // global state to be kept between render calls
 let initialized = false;
@@ -122,8 +123,8 @@ function App(): JSX.Element {
     const [gitUri, setGitUri] = useState<string>();
     const [gitUser, setGitUser] = useState<string>();
     const [gitMail, setGitMail] = useState<string>();
-    const [artemisToken, setArtemisToken] = useState<string>();
-    const [artemisUrl, setArtemisUrl] = useState<string>();
+    const [extraEnv, setExtraEnv] = useState<Record<string, string>>({});
+    const [appDefFromUrl, setAppDefFromUrl] = useState<boolean>(false);
 
     const [autoStart, setAutoStart] = useState<boolean>(false);
     const autoStartRequestedRef = useRef(false);
@@ -132,6 +133,13 @@ function App(): JSX.Element {
     const [standaloneAppDef, setStandaloneAppDef] = useState<string>();
 
     if (!initialized) {
+        // When Gitea OIDC is enabled, restore the original query string (gitUri/appDef/...)
+        // that was preserved across the OIDC redirect before parsing the URL parameters.
+        if (config.useGiteaOidc) {
+            initGitea(config);
+            restoreGiteaRedirectSearch();
+        }
+
         const urlParams = new URLSearchParams(window.location.search);
 
         // Get appDef parameter from URL and set it as the default selection
@@ -153,6 +161,7 @@ function App(): JSX.Element {
                     setSelectedAppDefinition(pathBlueprintSelection);
                     setSelectedAppName(pathBlueprintSelection);
                 }
+                setAppDefFromUrl(true);
             } else {
                 setError('Invalid default selection value: ' + pathBlueprintSelection);
                 console.error('Invalid default selection value: ' + pathBlueprintSelection);
@@ -167,20 +176,25 @@ function App(): JSX.Element {
             }
         }
 
-        // Get artemisToken parameter from URL.
-        if (urlParams.has('artemisToken')) {
-            const artemisTokenParam = urlParams.get('artemisToken');
-            if (artemisTokenParam) {
-                setArtemisToken(artemisTokenParam);
+        // Collect arbitrary environment variables passed via `env.<KEY>` query params
+        // (e.g. env.ARTEMIS_TOKEN, env.MY_VAR). Any external system can supply these.
+        // Keys are validated against the Kubernetes C_IDENTIFIER rule so that invalid
+        // names never reach the deployment (they would be rejected by the K8s API).
+        const ENV_PREFIX = 'env.';
+        const VALID_ENV_KEY = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+        const collectedEnv: Record<string, string> = {};
+        urlParams.forEach((value, key) => {
+            if (key.startsWith(ENV_PREFIX) && value) {
+                const envKey = key.slice(ENV_PREFIX.length);
+                if (VALID_ENV_KEY.test(envKey)) {
+                    collectedEnv[envKey] = value;
+                } else {
+                    console.warn(`Ignoring env var with invalid key: ${envKey}`);
+                }
             }
-        }
-
-        // Get artemisUrl parameter from URL.
-        if (urlParams.has('artemisUrl')) {
-            const artemisUrlParam = urlParams.get('artemisUrl');
-            if (artemisUrlParam) {
-                setArtemisUrl(artemisUrlParam);
-            }
+        });
+        if (Object.keys(collectedEnv).length > 0) {
+            setExtraEnv(collectedEnv);
         }
 
         // Get gitUser parameter from URL.
@@ -242,6 +256,30 @@ function App(): JSX.Element {
                 .catch(() => {
                     console.error('Authentication Failed');
                 });
+        } else if (config.useGiteaOidc) {
+            giteaCheckSso()
+                .then(giteaUser => {
+                    if (giteaUser) {
+                        const mail = giteaUser.profile?.email;
+                        const preferredUsername = giteaUser.profile?.preferred_username;
+                        setToken(giteaUser.access_token);
+                        if (mail) {
+                            setEmail(mail);
+                        }
+                        setUsername(preferredUsername ?? mail);
+                        // Fall back to the Gitea claims for git author identity when the
+                        // deep link did not already provide them via URL parameters.
+                        if (!urlParams.has('gitUser') && preferredUsername) {
+                            setGitUser(preferredUsername);
+                        }
+                        if (!urlParams.has('gitMail') && mail) {
+                            setGitMail(mail);
+                        }
+                    }
+                })
+                .catch(() => {
+                    console.error('Authentication Failed');
+                });
         }
         initialized = true;
     }
@@ -255,7 +293,7 @@ function App(): JSX.Element {
                 .then(() => {
                     // ping successful continue with launch
                     let workspace: string;
-                    const workspaceUser = config.useKeycloak ? username : user;
+                    const workspaceUser = config.useKeycloak ? username : config.useGiteaOidc ? email : user;
                     const workspaceUserSegment = sanitizeWorkspaceSegment(workspaceUser, 'user');
                     // Fold the selected build system (template) into the workspace identity so
                     // that, e.g., the Bazel and Make variants of the same app definition get
@@ -296,13 +334,10 @@ function App(): JSX.Element {
                         accessToken: token
                     };
 
-                    const envFromMap: Record<string, string> = { THEIA: 'true' };
-                    if (artemisToken) {
-                        envFromMap.ARTEMIS_TOKEN = artemisToken;
-                    }
-                    if (artemisUrl) {
-                        envFromMap.ARTEMIS_URL = artemisUrl;
-                    }
+                    // Seed from the arbitrary env.<KEY> params (which now carry ARTEMIS_TOKEN,
+                    // ARTEMIS_URL, and anything an external system provides), then apply the
+                    // still-hardcoded git/template values, and set THEIA last so it stays guaranteed.
+                    const envFromMap: Record<string, string> = { ...extraEnv };
                     if (gitUri) {
                         envFromMap.GIT_URI = gitUri;
                     }
@@ -315,9 +350,14 @@ function App(): JSX.Element {
                     if (buildSystemId) {
                         envFromMap.TEMPLATE = buildSystemId;
                     }
+                    envFromMap.THEIA = 'true';
+                    if (config.useGiteaOidc && token) {
+                        // Passed to the session so it can clone the private Gitea repo. Do not log.
+                        envFromMap.GIT_TOKEN = token;
+                    }
 
                     const launchEnv = { fromMap: envFromMap };
-                    const launchUser = config.useKeycloak ? email! : user!;
+                    const launchUser = config.useKeycloak ? email! : config.useGiteaOidc ? email! : user!;
                     const serviceAuthToken = getServiceAuthToken(config);
                     const createWorkspaceLaunchRequest = (): LaunchRequest => ({
                         ...LaunchRequest.createWorkspace(
@@ -403,11 +443,11 @@ function App(): JSX.Element {
                     setLoading(false);
                 });
         },
-        [config, gitUri, username, user, token, artemisToken, artemisUrl, gitUser, gitMail, email]
+        [config, gitUri, username, user, token, extraEnv, gitUser, gitMail, email]
     );
 
     const handleAppSelected = (appId: string, _: string): void => {
-        const isStandaloneMode = !artemisToken && !gitUri;
+        const isStandaloneMode = !gitUri && Object.keys(extraEnv).length === 0;
         if (isStandaloneMode) {
             const appDef = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appId);
             const buildSystems = appDef?.buildSystems ?? [];
@@ -432,7 +472,19 @@ function App(): JSX.Element {
             return;
         }
 
-        if (selectedAppDefinition && gitUri && artemisToken) {
+        if (config.useGiteaOidc && !token) {
+            autoStartRequestedRef.current = false;
+            return;
+        }
+
+        // Auto-launch only for external deep links: the app definition must come from the
+        // URL (not the always-truthy default), plus either at least one injected env var
+        // (the Artemis case now carries ARTEMIS_TOKEN via env.*) or the Gitea OIDC + gitUri flow.
+        if (
+            appDefFromUrl &&
+            selectedAppDefinition &&
+            (Object.keys(extraEnv).length > 0 || (gitUri && config.useGiteaOidc))
+        ) {
             // authenticate();
             setAutoStart(true);
             if (!autoStartRequestedRef.current) {
@@ -443,7 +495,7 @@ function App(): JSX.Element {
             autoStartRequestedRef.current = false;
             setAutoStart(false);
         }
-    }, [username, user, selectedAppDefinition, gitUri, artemisToken, handleStartSession, config.useKeycloak]);
+    }, [username, user, token, selectedAppDefinition, appDefFromUrl, gitUri, extraEnv, handleStartSession, config.useKeycloak, config.useGiteaOidc]);
 
     /* eslint-enable react-hooks/rules-of-hooks */
 
@@ -480,7 +532,15 @@ function App(): JSX.Element {
             });
     };
 
-    const needsLogin = config.useKeycloak && !token;
+    const loginWithGitea: () => void = (): void => {
+        giteaLogin().catch(() => {
+            console.error('Authentication Failed');
+            setError('Authentication failed');
+        });
+    };
+
+    const login = config.useGiteaOidc ? loginWithGitea : authenticate;
+    const needsLogin = (config.useKeycloak || config.useGiteaOidc) && !token;
     const logoFileExtension = config.logoFileExtension ?? 'svg';
 
     if (currentPage === 'imprint') {
@@ -510,8 +570,8 @@ function App(): JSX.Element {
         <div className='App'>
             <VantaBackground>
                 <Header
-                    email={config.useKeycloak ? email : undefined}
-                    authenticate={config.useKeycloak ? authenticate : undefined}
+                    email={config.useKeycloak || config.useGiteaOidc ? email : undefined}
+                    authenticate={config.useKeycloak || config.useGiteaOidc ? login : undefined}
                     logoutUrl={config.useKeycloak ? logoutUrl : undefined}
                 />
                 <div className='body'>
@@ -527,7 +587,7 @@ function App(): JSX.Element {
                                 </h2>
                                 <div>
                                     {needsLogin ? (
-                                        <LoginButton login={authenticate} />
+                                        <LoginButton login={login} />
                                     ) : autoStart ? (
                                         <LaunchApp
                                             appName={selectedAppName}
