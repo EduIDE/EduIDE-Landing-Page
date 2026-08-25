@@ -65,6 +65,9 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
     sentryEnable?: boolean;
     sentryEnvironment?: string;
     sentryDsn?: string;
+    useGiteaOidc?: boolean;
+    giteaIssuerUrl?: string;
+    giteaClientId?: string;
 };
 
 /**

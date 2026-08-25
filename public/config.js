@@ -90,4 +90,15 @@ window.theiaCloudConfig = {
   keycloakAuthUrl: "http://localhost:8080/auth/",
   keycloakRealm: "TheiaCloud",
   keycloakClientId: "theia-cloud",
+  // Gitea OIDC configuration - only used when useGiteaOidc: true
+  // Enables logging in against a Gitea instance via OIDC (Auth Code + PKCE)
+  // so that private repositories opened via a Gitea "Open with" deep link
+  // (?gitUri=<repoCloneUrl>&appDef=<appId>) can be cloned using the user's token.
+  // When true, authentication uses Gitea directly (Keycloak is not involved).
+  useGiteaOidc: false,
+  // Base URL of the Gitea instance, e.g. "https://gitea.example.com".
+  // OIDC discovery is performed at <giteaIssuerUrl>/.well-known/openid-configuration
+  giteaIssuerUrl: "https://gitea.example.com",
+  // OIDC client id registered in Gitea for this landing page.
+  giteaClientId: "eduide-landing-page",
 };

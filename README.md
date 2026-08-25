@@ -7,7 +7,7 @@ Landing page for EduIDE Cloud workspace management, providing a user-friendly in
 - **User Authentication**: Keycloak-based authentication and authorization
 - **Workspace Management**: Launch and manage multiple cloud-based IDEs
 - **Dynamic Configuration**: Runtime configuration via `config.js`
-- **Query Parameters**: Support for various URL parameters (gitUri, gitToken, artemisToken, etc.)
+- **Query Parameters**: Support for various URL parameters (gitUri, gitUser, and arbitrary `env.<KEY>` environment variables)
 - **Responsive Design**: Modern UI with dark/light theme support
 - **3D Background**: Interactive Vanta.js animated background
 
@@ -143,12 +143,13 @@ The landing page supports various URL query parameters to pre-configure the sess
 | `gitUri` | string | Git repository URL to clone |
 | `gitUser` | string | Git username for authentication |
 | `gitMail` | string | Git email for authentication |
-| `artemisUrl` | string | Artemis service URL |
-| `artemisToken` | string | Artemis authentication token |
+| `env.<KEY>` | string | Arbitrary environment variable passed to the session (see below) |
+
+**Environment variables (`env.<KEY>`):** Any query parameter prefixed with `env.` is forwarded to the session as an environment variable. For example, `env.ARTEMIS_TOKEN=...` sets `ARTEMIS_TOKEN` and `env.MY_VAR=hello` sets `MY_VAR`. Any external system can supply its own variables this way; there is no fixed allowlist. Keys must be valid environment-variable names (`[A-Za-z_][A-Za-z0-9_]*`); invalid keys are ignored. The Artemis integration passes `env.ARTEMIS_TOKEN` and `env.ARTEMIS_URL`. Because these values travel in the URL (and may include credentials such as `ARTEMIS_TOKEN`), treat the launch URL as sensitive.
 
 **Auto-clone and private repositories:** On session start the repository is cloned from `gitUri` exactly as provided; no credential is added. For a private repository the credential must be embedded in `gitUri` itself, for example `https://<user>:<token>@host/org/repo.git`. A plain `gitUri` without embedded credentials only works for public repositories. Because `gitUri` may contain a token, treat the URL as sensitive.
 
-Example: `https://your-landing-page.com/?appDef=myapp&gitUri=https://github.com/user/repo.git`
+Example: `https://your-landing-page.com/?appDef=myapp&gitUri=https://github.com/user/repo.git&env.ARTEMIS_TOKEN=<token>&env.ARTEMIS_URL=https://artemis.example.org&env.MY_VAR=hello`
 
 ## NPM Scripts
 
