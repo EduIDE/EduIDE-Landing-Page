@@ -460,8 +460,7 @@ function App(): React.JSX.Element {
             .then((authenticated: boolean) => {
                 if (!authenticated) {
                     keycloak.login({
-                        redirectUri: getCurrentRedirectUri(),
-                        action: 'webauthn-register-passwordless:skip_if_exists'
+                        redirectUri: getCurrentRedirectUri()
                     });
                 } else {
                     const parsedToken = keycloak.idTokenParsed;
