@@ -9,6 +9,8 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+// The hook lives next to its provider on purpose; the only cost is a Fast Refresh reload when editing this rarely-touched file.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useTheme = (): ThemeContextType => {
     const context = useContext(ThemeContext);
     if (!context) {

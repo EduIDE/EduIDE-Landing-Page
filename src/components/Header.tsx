@@ -23,7 +23,7 @@ const getGravatarUrl = (email: string, size: number = 40): string => {
     return `https://www.gravatar.com/avatar/${hashStr}?s=${size}&d=identicon&r=pg`;
 };
 
-export const Header = ({ email, authenticate, logoutUrl }: HeaderProps): JSX.Element => (
+export const Header = ({ email, authenticate, logoutUrl }: HeaderProps): React.JSX.Element => (
     <div className='header'>
         <div className='header__app-name'>
             <h1 className='header__title'>EduIDE Cloud</h1>

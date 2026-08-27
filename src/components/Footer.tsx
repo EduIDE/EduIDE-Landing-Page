@@ -6,7 +6,7 @@ interface FooterProps {
     footerLinks?: FooterLinksConfig;
 }
 
-export const Footer = ({ selectedAppDefinition, onNavigate, footerLinks }: FooterProps): JSX.Element => {
+export const Footer = ({ selectedAppDefinition, onNavigate, footerLinks }: FooterProps): React.JSX.Element => {
     const handleNavigation = (page: 'home' | 'imprint' | 'privacy'): void => {
         if (onNavigate) {
             onNavigate(page);

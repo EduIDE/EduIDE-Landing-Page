@@ -53,7 +53,7 @@ function getCurrentRedirectUri(): string {
     return window.location.href;
 }
 
-function App(): JSX.Element {
+function App(): React.JSX.Element {
     const [config] = useState<ExtendedTheiaCloudConfig | undefined>(() => getTheiaCloudConfig());
     const [error, setError] = useState<string>();
     const [loading, setLoading] = useState(false);
@@ -215,7 +215,7 @@ function App(): JSX.Element {
 
         if (config.useKeycloak) {
             keycloakConfig = {
-                url: config.keycloakAuthUrl,
+                url: config.keycloakAuthUrl!,
                 realm: config.keycloakRealm!,
                 clientId: config.keycloakClientId!
             };
@@ -450,7 +450,7 @@ function App(): JSX.Element {
     document.title = config.pageTitle || 'EduIDE Cloud';
 
     const authenticate: () => void = (): void => {
-        const keycloak = new Keycloak(keycloakConfig);
+        const keycloak = new Keycloak(keycloakConfig!);
 
         keycloak
             .init({
