@@ -1,23 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-type Theme = 'light' | 'dark';
-
-interface ThemeContextType {
-    theme: Theme;
-    toggleTheme: () => void;
-}
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-// The hook lives next to its provider on purpose; the only cost is a Fast Refresh reload when editing this rarely-touched file.
-// eslint-disable-next-line react-refresh/only-export-components
-export const useTheme = (): ThemeContextType => {
-    const context = useContext(ThemeContext);
-    if (!context) {
-        throw new Error('useTheme must be used within a ThemeProvider');
-    }
-    return context;
-};
+import { type Theme, ThemeContext } from './theme-context';
 
 interface ThemeProviderProps {
     children: React.ReactNode;

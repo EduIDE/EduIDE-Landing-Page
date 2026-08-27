@@ -1,0 +1,32 @@
+# The repo has no tests, so lint and the type-check inside the Docker build are
+# the only signal a dependency bump gets. The lint script uses --max-warnings 0,
+# so a single new warning fails the job on purpose.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+
+  # Renovate reports vulnerabilities already on main; this one blocks a PR that
+  # is about to add a new dependency with a known advisory.
+  dependency-review:
+    uses: EduIDE/.github/.github/workflows/dependency-review.yml@v1
