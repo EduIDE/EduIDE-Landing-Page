@@ -43,9 +43,13 @@ jobs:
     uses: EduIDE/.github/.github/workflows/build-and-push-docker-image.yml@v1
     with:
       docker-file: Dockerfile
-      image-name: eduide/eduidec-landing-page
+      image-name: eduide/eduide-landing-page
       docker-context: .
-      image-tag: ${{ github.event_name == 'release' && github.event.release.tag_name || github.event_name == 'workflow_dispatch' && inputs.image_tag || '' }}
+      # Deliberately NOT passed on a release. An override is used verbatim by
+      # the shared workflow, which would defeat its `${RELEASE_TAG#v}`
+      # normalisation and publish `v1.2.0` instead of `1.2.0` - a tag no chart
+      # can consume, since appVersion and the image tag must be one string.
+      image-tag: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || '' }}
       no-cache: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.disable_layer_cache) || false }}
       # Small nginx + Vite build; the disk-reclaim step is not worth the time.
       free-disk-space: false
