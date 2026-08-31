@@ -76,7 +76,8 @@
     align-items: center;
     justify-content: flex-start;
     padding: 0px 20px 0px;
-    min-height: 0; /* Allow flex item to shrink */
+    min-height: 0;
+    /* Allow flex item to shrink */
 }
 
 .App__logo {
@@ -150,7 +151,7 @@
     padding: 24px;
 }
 
-.Build-System__list > * {
+.Build-System__list>* {
     flex: 0 1 150px;
 }
 
@@ -192,6 +193,13 @@
     transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.App__grid-item--disabled,
+.App__grid-item:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .App__grid-item-logo {
     max-width: 60px;
     max-height: 60px;
@@ -217,6 +225,44 @@
     margin-bottom: 4px;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+.App__mode-selector {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 0.25rem;
+}
+
+.App__mode-selector-inner {
+    display: inline-flex;
+    background: var(--color-background-card);
+    border: 1px solid var(--color-border);
+    border-radius: 2rem;
+    padding: 3px;
+    gap: 2px;
+}
+
+.App__mode-selector-btn {
+    padding: 0.35rem 1.1rem;
+    background: transparent;
+    color: var(--color-text-muted);
+    border: none;
+    border-radius: 2rem;
+    font-family: 'Anonymous Pro', monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.App__mode-selector-btn:hover:not(.App__mode-selector-btn--active) {
+    color: var(--color-text-primary);
+}
+
+.App__mode-selector-btn--active {
+    background: var(--color-text-secondary);
+    color: var(--color-background);
 }
 
 .App__error-message {
@@ -272,9 +318,11 @@
     display: flex;
     align-items: center;
     justify-content: center;
+
     @media (min-width: 768px) {
         justify-content: flex-end;
     }
+
     gap: 0.5rem;
 }
 
@@ -315,9 +363,11 @@
 .App__footer__content {
     display: grid;
     grid-template-columns: repeat(1, minmax(0, 1fr));
+
     @media (min-width: 768px) {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
+
     gap: 0.5rem;
     align-items: center;
     justify-content: space-between;
@@ -327,6 +377,7 @@
 .App__footer__attribution {
     font-size: 0.85rem;
     color: var(--color-text-muted);
+
     @media (min-width: 768px) {
         justify-self: start;
     }

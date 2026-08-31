@@ -5,7 +5,7 @@ import Keycloak, { KeycloakConfig } from 'keycloak-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { ExtendedAppDefinition, ExtendedTheiaCloudConfig } from './common-extensions/types';
-import { getServiceAuthToken } from './common-extensions/types';
+import { AppMode, getServiceAuthToken } from './common-extensions/types';
 import { AppLogo } from './components/AppLogo';
 import { ErrorComponent } from './components/ErrorComponent';
 import { Footer } from './components/Footer';
@@ -26,6 +26,11 @@ let initialAppName = '';
 let initialAppDefinition = '';
 let keycloakConfig: KeycloakConfig | undefined = undefined;
 const WORKSPACE_SEGMENT_LIMIT = 12;
+
+const APP_MODES: { value: AppMode; label: string }[] = [
+    { value: AppMode.Standard, label: 'Standard' },
+    { value: AppMode.AI, label: '✦ AI' }
+];
 
 function createDeterministicId(value: string): string {
     let hash = 0;
@@ -112,6 +117,7 @@ function App(): React.JSX.Element {
     /* eslint-disable react-hooks/rules-of-hooks */
     const [selectedAppName, setSelectedAppName] = useState<string>(initialAppName);
     const [selectedAppDefinition, setSelectedAppDefinition] = useState<string>(initialAppDefinition);
+    const [appMode, setAppMode] = useState<AppMode>(AppMode.Standard);
 
     const [email, setEmail] = useState<string>();
     const [username, setUsername] = useState<string>();
@@ -143,12 +149,10 @@ function App(): React.JSX.Element {
             ) {
                 if (config.additionalApps && config.additionalApps.length > 0) {
                     const appDefinition = config.additionalApps.find(
-                        appDef => (appDef.serviceAuthToken || appDef.appId) === pathBlueprintSelection
+                        appDef => (appDef.serviceAuthToken || appDef.appId) === pathBlueprintSelection || appDef.aiVariant === pathBlueprintSelection
                     );
                     setSelectedAppName(appDefinition ? appDefinition.appName : pathBlueprintSelection);
-                    setSelectedAppDefinition(
-                        appDefinition ? appDefinition.serviceAuthToken || appDefinition.appId : pathBlueprintSelection
-                    );
+                    setSelectedAppDefinition(pathBlueprintSelection);
                 } else {
                     setSelectedAppDefinition(pathBlueprintSelection);
                     setSelectedAppName(pathBlueprintSelection);
@@ -409,7 +413,7 @@ function App(): React.JSX.Element {
     const handleAppSelected = (appId: string, _: string): void => {
         const isStandaloneMode = !artemisToken && !gitUri;
         if (isStandaloneMode) {
-            const appDef = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appId);
+            const appDef = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appId || a.aiVariant === appId);
             const buildSystems = appDef?.buildSystems ?? [];
             if (buildSystems.length <= 1) {
                 handleStartSession(appId, buildSystems.length === 1 ? buildSystems[0].id : undefined);
@@ -503,7 +507,8 @@ function App(): React.JSX.Element {
     }
 
     const standaloneAppBuildSystems =
-        config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === standaloneAppDef)?.buildSystems ?? [];
+        config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === standaloneAppDef || a.aiVariant === standaloneAppDef)
+            ?.buildSystems ?? [];
 
     return (
         <div className='App'>
@@ -546,7 +551,29 @@ function App(): React.JSX.Element {
                                             onBack={() => setStandaloneWizardStep('language')}
                                         />
                                     ) : (
-                                        <SelectApp appDefinitions={config.additionalApps} onSelectApp={handleAppSelected} />
+                                        <>
+                                            <div className='App__mode-selector'>
+                                                <div className='App__mode-selector-inner'>
+                                                    {APP_MODES.map(mode => (
+                                                        <button
+                                                            key={mode.value}
+                                                            className={`App__mode-selector-btn${
+                                                                appMode === mode.value ? ' App__mode-selector-btn--active' : ''
+                                                            }`}
+                                                            onClick={() => setAppMode(mode.value)}
+                                                            aria-pressed={appMode === mode.value}
+                                                        >
+                                                            {mode.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <SelectApp
+                                                appDefinitions={config.additionalApps}
+                                                onSelectApp={handleAppSelected}
+                                                appMode={appMode}
+                                            />
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -572,7 +599,7 @@ function isDefaultSelectionValueValid(defaultSelection: string, appDefinition: s
         return true;
     }
     if (additionalApps && additionalApps.length > 0) {
-        return additionalApps.some(def => def.serviceAuthToken === defaultSelection);
+        return additionalApps.some(def => (def.serviceAuthToken || def.appId) === defaultSelection || def.aiVariant === defaultSelection);
     }
     // If there are no additional apps explicitly configured, we accept any app definition given via url parameter
     return true;

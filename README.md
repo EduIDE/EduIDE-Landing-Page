@@ -127,7 +127,7 @@ window.theiaCloudConfig = {
 | `additionalApps` | array | No | Additional apps to display |
 | `footerLinks` | object | No | Footer link configuration |
 
-Each entry in `additionalApps` may optionally include `image` (or `Image` for compatibility). When omitted, the landing page keeps the current behavior and derives the logo path from `appName`. Apps may also set `visible: false` to stay launchable through direct `appDef` URLs without appearing on the landing page. Visibility defaults to true and does not need to be configured for visible apps. When provided, the landing page uses the image value like this:
+Each entry in `additionalApps` may optionally include `image` (or `Image` for compatibility). When omitted, the landing page keeps the current behavior and derives the logo path from `appName`. Apps may also set `visible: false` to stay launchable through direct `appDef` URLs without appearing on the landing page. Set `aiVariant` to the app definition that should launch when the AI mode is selected; build-system choices are reused for the AI variant. Visibility defaults to true and does not need to be configured for visible apps. When provided, the landing page uses the image value like this:
 
 - Plain name like `java-17` becomes `/assets/logos/java-17-logo.png`
 - Filename like `java-17-logo.png` becomes `/assets/logos/java-17-logo.png`
