@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "module": "preserve",
+        "target": "ES2022",
+        "lib": [
+            "ES2022"
+        ],
+        "sourceMap": true,
+        "rootDir": "src",
+        "strict": true,
+        "noFallthroughCasesInSwitch": true,
+        "noUnusedParameters": true,
+        "noImplicitOverride": true,
+        "noEmit": true,
+        "allowImportingTsExtensions": true,
+        "verbatimModuleSyntax": true,
+        "skipLibCheck": true,
+        "isolatedModules": true,
+        "moduleDetection": "force",
+        "esModuleInterop": true,
+        "noUnusedLocals": true
+    },
+    "include": ["src/**/*.ts"],
+    "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+}

@@ -1,0 +1,28 @@
+{
+    "name": "landing-backend",
+    "version": "0.0.1",
+    "description": "Cookie-based credential handoff backend for the EduIDE landing page",
+    "type": "module",
+    "engines": {
+        "node": ">=22"
+    },
+    "scripts": {
+        "dev": "tsx watch src/index.ts",
+        "build": "npm run ts:check && node esbuild.js --production",
+        "build:dev": "node esbuild.js",
+        "start": "node dist/index.js",
+        "ts:check": "tsc --noEmit",
+        "test": "node --import tsx/esm --test src/app.test.ts"
+    },
+    "dependencies": {
+        "@hono/node-server": "^1.19.6",
+        "arktype": "^2.1.26",
+        "hono": "^4.10.5"
+    },
+    "devDependencies": {
+        "@types/node": "^22.0.0",
+        "esbuild": "^0.27.0",
+        "tsx": "^4.19.4",
+        "typescript": "^5.9.3"
+    }
+}
