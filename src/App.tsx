@@ -522,7 +522,13 @@ function App(): React.JSX.Element {
                                 <div style={{ marginTop: '2rem' }}></div>
                                 <AppLogo fileExtension={logoFileExtension} />
                                 <h2 className='App__title'>
-                                    {standaloneWizardStep === 'buildSystem' ? 'Choose your build system' : 'Choose your Online IDE'}
+                                    {needsLogin
+                                        ? 'Login to use EduIDE'
+                                        : autoStart
+                                          ? 'Launch your Online IDE'
+                                          : standaloneWizardStep === 'buildSystem'
+                                            ? 'Choose your build system'
+                                            : 'Choose your programming language'}
                                 </h2>
                                 <div>
                                     {needsLogin ? (
