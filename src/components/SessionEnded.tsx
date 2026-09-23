@@ -16,6 +16,11 @@ interface SessionEndedProps {
 
 const COUNTDOWN_SECONDS = 5;
 
+/** The student is actually looking at this tab - not merely that it is the active tab in a hidden window. */
+function isInForeground(): boolean {
+    return document.visibilityState === 'visible' && document.hasFocus();
+}
+
 function describeReason(reason: SessionEndedReason): string {
     switch (reason) {
         case 'inactivity':
@@ -42,6 +47,7 @@ export const SessionEnded: React.FC<SessionEndedProps> = ({ reason, descriptor, 
 
     const [countdown, setCountdown] = useState<number | undefined>(undefined);
     const [cancelled, setCancelled] = useState(false);
+    const [foreground, setForeground] = useState(() => isInForeground());
 
     const resume = useCallback(
         (automatic: boolean): void => {
@@ -65,7 +71,7 @@ export const SessionEnded: React.FC<SessionEndedProps> = ({ reason, descriptor, 
         }
 
         const startIfInFront = (): void => {
-            if (document.visibilityState === 'visible' && document.hasFocus()) {
+            if (isInForeground()) {
                 setCountdown(COUNTDOWN_SECONDS);
             }
         };
@@ -80,10 +86,32 @@ export const SessionEnded: React.FC<SessionEndedProps> = ({ reason, descriptor, 
         };
     }, [autoResumeAllowed, cancelled, countdown]);
 
+    // Tracks the foreground state so the countdown effect re-evaluates when it changes.
+    useEffect(() => {
+        const sync = (): void => setForeground(isInForeground());
+        window.addEventListener('visibilitychange', sync);
+        window.addEventListener('focus', sync);
+        window.addEventListener('blur', sync);
+
+        return () => {
+            window.removeEventListener('visibilitychange', sync);
+            window.removeEventListener('focus', sync);
+            window.removeEventListener('blur', sync);
+        };
+    }, []);
+
     useEffect(() => {
         if (countdown === undefined || cancelled) {
             return;
         }
+
+        // The foreground check is re-made on every tick, not just when the countdown starts. A
+        // student who switches away mid-countdown must not have a pod started behind their back -
+        // the countdown simply stands still until they come back.
+        if (!isInForeground()) {
+            return;
+        }
+
         if (countdown <= 0) {
             resume(true);
             return;
@@ -91,7 +119,7 @@ export const SessionEnded: React.FC<SessionEndedProps> = ({ reason, descriptor, 
 
         const timer = window.setTimeout(() => setCountdown(countdown - 1), 1000);
         return () => window.clearTimeout(timer);
-    }, [countdown, cancelled, resume]);
+    }, [countdown, cancelled, resume, foreground]);
 
     const cancelAutoResume = (): void => {
         setCancelled(true);
@@ -137,7 +165,7 @@ export const SessionEnded: React.FC<SessionEndedProps> = ({ reason, descriptor, 
 
                 {countdown !== undefined && !cancelled && (
                     <p className='session-ended__countdown'>
-                        Resuming automatically in {countdown}s.{' '}
+                        {foreground ? `Resuming automatically in ${countdown}s.` : 'Resuming when you return to this tab.'}{' '}
                         <button className='session-ended__btn session-ended__btn--secondary' onClick={cancelAutoResume}>
                             Cancel
                         </button>

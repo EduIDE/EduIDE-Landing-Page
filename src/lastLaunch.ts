@@ -24,6 +24,11 @@ export interface LaunchDescriptor {
     gitMail?: string;
     artemisUrl?: string;
     artemisToken?: string;
+    /**
+     * With Keycloak disabled the user is a per-load `anonymous-<random>`, and it feeds the
+     * workspace name - so resuming without it would land on a different, empty workspace.
+     */
+    anonymousUser?: string;
     /** Ephemeral sessions have no volume, so there is nothing to resume into. */
     ephemeral: boolean;
     savedAt: number;

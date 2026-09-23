@@ -33,6 +33,23 @@ const WORKSPACE_SEGMENT_LIMIT = 12;
 
 export type LandingPage = 'home' | 'imprint' | 'privacy' | 'sessionEnded';
 
+/**
+ * The launch inputs the workspace name is derived from.
+ *
+ * Resume passes these explicitly rather than pushing them through setState first: the setters do
+ * not update the values this render's handleStartSession closed over, so a launch fired straight
+ * after them would compute the workspace name from the OLD (empty) values and silently mount a
+ * brand-new empty workspace instead of the student's.
+ */
+interface LaunchInputs {
+    gitUri?: string;
+    gitUser?: string;
+    gitMail?: string;
+    artemisUrl?: string;
+    artemisToken?: string;
+    anonymousUser?: string;
+}
+
 function createDeterministicId(value: string): string {
     let hash = 0;
 
@@ -55,6 +72,28 @@ function sanitizeWorkspaceSegment(value: string | undefined, fallback: string): 
     return normalized.substring(0, Math.min(normalized.length, WORKSPACE_SEGMENT_LIMIT));
 }
 
+function pageFromPath(path: string): LandingPage {
+    if (path === '/imprint') {
+        return 'imprint';
+    }
+    if (path === '/privacy') {
+        return 'privacy';
+    }
+    if (path === '/session-ended' || path.startsWith('/session-ended/')) {
+        return 'sessionEnded';
+    }
+    return 'home';
+}
+
+/**
+ * The gateway can only redirect to a fixed path, so a bare /session-ended carries no reason. The
+ * IDE, which knows why the session is ending, appends one.
+ */
+function reasonFromPath(path: string): SessionEndedReason {
+    const reason = path.split('/')[2];
+    return reason === 'inactivity' || reason === 'lifetime' ? reason : undefined;
+}
+
 function getCurrentRedirectUri(): string {
     return window.location.href;
 }
@@ -63,26 +102,17 @@ function App(): React.JSX.Element {
     const [config] = useState<ExtendedTheiaCloudConfig | undefined>(() => getTheiaCloudConfig());
     const [error, setError] = useState<string>();
     const [loading, setLoading] = useState(false);
-    const [currentPage, setCurrentPage] = useState<LandingPage>('home');
-    const [sessionEndedReason, setSessionEndedReason] = useState<SessionEndedReason>(undefined);
+    // Resolved from the URL synchronously: if this defaulted to 'home', a first visit to
+    // /session-ended carrying appDef+gitUri+artemisToken would let the auto-start effect launch
+    // before the routing effect corrected the page.
+    const [currentPage, setCurrentPage] = useState<LandingPage>(() => pageFromPath(window.location.pathname));
+    const [sessionEndedReason, setSessionEndedReason] = useState<SessionEndedReason>(() => reasonFromPath(window.location.pathname));
 
     // Handle URL routing
     useEffect(() => {
         const updatePageFromUrl = (): void => {
-            const path = window.location.pathname;
-            if (path === '/imprint') {
-                setCurrentPage('imprint');
-            } else if (path === '/privacy') {
-                setCurrentPage('privacy');
-            } else if (path === '/session-ended' || path.startsWith('/session-ended/')) {
-                // The gateway can only redirect to a fixed path, so a bare /session-ended carries no
-                // reason. The IDE, which knows why it is ending, appends one.
-                const reason = path.split('/')[2];
-                setSessionEndedReason(reason === 'inactivity' || reason === 'lifetime' ? reason : undefined);
-                setCurrentPage('sessionEnded');
-            } else {
-                setCurrentPage('home');
-            }
+            setCurrentPage(pageFromPath(window.location.pathname));
+            setSessionEndedReason(reasonFromPath(window.location.pathname));
         };
 
         // Initial load
@@ -267,15 +297,23 @@ function App(): React.JSX.Element {
     }
 
     const handleStartSession = useCallback(
-        (appDefinition: string, buildSystemId?: string): void => {
+        (appDefinition: string, buildSystemId?: string, overrides?: LaunchInputs): void => {
             setLoading(true);
             setError(undefined);
+
+            // Overrides win when resuming; otherwise the current state is the source of truth.
+            const launchGitUri = overrides?.gitUri ?? gitUri;
+            const launchGitUser = overrides?.gitUser ?? gitUser;
+            const launchGitMail = overrides?.gitMail ?? gitMail;
+            const launchArtemisUrl = overrides?.artemisUrl ?? artemisUrl;
+            const launchArtemisToken = overrides?.artemisToken ?? artemisToken;
+            const launchAnonymousUser = overrides?.anonymousUser ?? user;
 
             TheiaCloud.ping(PingRequest.create(config.serviceUrl, getServiceAuthToken(config)))
                 .then(() => {
                     // ping successful continue with launch
                     let workspace: string;
-                    const workspaceUser = config.useKeycloak ? username : user;
+                    const workspaceUser = config.useKeycloak ? username : launchAnonymousUser;
                     const workspaceUserSegment = sanitizeWorkspaceSegment(workspaceUser, 'user');
                     // Fold the selected build system (template) into the workspace identity so
                     // that, e.g., the Bazel and Make variants of the same app definition get
@@ -283,7 +321,7 @@ function App(): React.JSX.Element {
                     const appKey = buildSystemId ? `${appDefinition}-${buildSystemId}` : appDefinition;
                     const workspaceAppSegment = sanitizeWorkspaceSegment(appKey, 'app');
 
-                    if (!gitUri) {
+                    if (!launchGitUri) {
                         workspace =
                             'ws-' +
                             workspaceAppSegment +
@@ -293,7 +331,7 @@ function App(): React.JSX.Element {
                             createDeterministicId(`${workspaceUser}-${appKey}-playground`);
                         console.log(`Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`);
                     } else {
-                        const repoName = gitUri
+                        const repoName = launchGitUri
                             .split('/')
                             .pop()
                             ?.replace(/\.git$/, '');
@@ -306,7 +344,7 @@ function App(): React.JSX.Element {
                             '-' +
                             workspaceUserSegment +
                             '-' +
-                            createDeterministicId(`${gitUri}${buildSystemId ? `-${buildSystemId}` : ''}`);
+                            createDeterministicId(`${launchGitUri}${buildSystemId ? `-${buildSystemId}` : ''}`);
                         console.log(`Prepared persistent workspace ${workspace} for ${appDefinition}`);
                     }
 
@@ -317,27 +355,27 @@ function App(): React.JSX.Element {
                     };
 
                     const envFromMap: Record<string, string> = { THEIA: 'true' };
-                    if (artemisToken) {
-                        envFromMap.ARTEMIS_TOKEN = artemisToken;
+                    if (launchArtemisToken) {
+                        envFromMap.ARTEMIS_TOKEN = launchArtemisToken;
                     }
-                    if (artemisUrl) {
-                        envFromMap.ARTEMIS_URL = artemisUrl;
+                    if (launchArtemisUrl) {
+                        envFromMap.ARTEMIS_URL = launchArtemisUrl;
                     }
-                    if (gitUri) {
-                        envFromMap.GIT_URI = gitUri;
+                    if (launchGitUri) {
+                        envFromMap.GIT_URI = launchGitUri;
                     }
-                    if (gitUser) {
-                        envFromMap.GIT_USER = gitUser;
+                    if (launchGitUser) {
+                        envFromMap.GIT_USER = launchGitUser;
                     }
-                    if (gitMail) {
-                        envFromMap.GIT_MAIL = gitMail;
+                    if (launchGitMail) {
+                        envFromMap.GIT_MAIL = launchGitMail;
                     }
                     if (buildSystemId) {
                         envFromMap.TEMPLATE = buildSystemId;
                     }
 
                     const launchEnv = { fromMap: envFromMap };
-                    const launchUser = config.useKeycloak ? email! : user!;
+                    const launchUser = config.useKeycloak ? email! : launchAnonymousUser!;
                     const serviceAuthToken = getServiceAuthToken(config);
                     const createWorkspaceLaunchRequest = (): LaunchRequest => ({
                         ...LaunchRequest.createWorkspace(
@@ -384,11 +422,12 @@ function App(): React.JSX.Element {
                                 config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appDefinition)?.appName ??
                                 appDefinition,
                             buildSystemId,
-                            gitUri,
-                            gitUser,
-                            gitMail,
-                            artemisUrl,
-                            artemisToken,
+                            gitUri: launchGitUri,
+                            gitUser: launchGitUser,
+                            gitMail: launchGitMail,
+                            artemisUrl: launchArtemisUrl,
+                            artemisToken: launchArtemisToken,
+                            anonymousUser: config.useKeycloak ? undefined : launchAnonymousUser,
                             ephemeral
                         });
                     rememberLaunch(attemptEphemeral);
@@ -558,17 +597,19 @@ function App(): React.JSX.Element {
     if (currentPage === 'sessionEnded') {
         const descriptor = readLastLaunch();
         const resumeSession = (toResume: LaunchDescriptor): void => {
-            // Rehydrate the inputs the workspace name is derived from, so the same volume is reused.
-            setGitUri(toResume.gitUri);
-            setGitUser(toResume.gitUser);
-            setGitMail(toResume.gitMail);
-            setArtemisUrl(toResume.artemisUrl);
-            setArtemisToken(toResume.artemisToken);
-            setSelectedAppDefinition(toResume.appDefinition);
-            setSelectedAppName(toResume.appName);
-            clearLastLaunch();
-            handleNavigation('home');
-            handleStartSession(toResume.appDefinition, toResume.buildSystemId);
+            // Hand the inputs straight to the launch. Going through setState would leave this
+            // render's handleStartSession closed over the old values and rebuild the workspace name
+            // from nothing, and navigating home first would let the auto-start effect fire a second
+            // launch. The descriptor is left in place until the new launch rewrites it, so a failed
+            // ping does not strip the student of their way back.
+            handleStartSession(toResume.appDefinition, toResume.buildSystemId, {
+                gitUri: toResume.gitUri,
+                gitUser: toResume.gitUser,
+                gitMail: toResume.gitMail,
+                artemisUrl: toResume.artemisUrl,
+                artemisToken: toResume.artemisToken,
+                anonymousUser: toResume.anonymousUser
+            });
         };
 
         return (
