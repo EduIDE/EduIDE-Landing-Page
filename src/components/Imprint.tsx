@@ -2,8 +2,10 @@ import './Imprint.css';
 
 import React from 'react';
 
+import type { LandingPage } from '../App';
+
 interface ImprintProps {
-    onNavigate?: (page: 'home' | 'imprint' | 'privacy') => void;
+    onNavigate?: (page: LandingPage) => void;
 }
 
 export const Imprint: React.FC<ImprintProps> = ({ onNavigate }) => (

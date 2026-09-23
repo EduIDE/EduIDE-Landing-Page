@@ -8,13 +8,40 @@ React SPA served by nginx.
 ## Layout
 
 ```
-src/App.tsx                    576 lines, and effectively the whole application
+src/App.tsx                    effectively the whole application
 src/common-extensions/types.ts the EduIDE-specific config surface
-src/components/                15 presentational components
+src/components/                16 presentational components
+src/lastLaunch.ts              what the last session was launched with, for resume
 src/sentry.ts                  reads the config a second time, before React mounts
 public/config.js               DEVELOPMENT ONLY - see below
-nginx.conf                     serves config.js uncached; SPA fallback for /imprint, /privacy
+nginx.conf                     serves config.js uncached; generic SPA fallback
 ```
+
+## /session-ended and resume
+
+When a session ends, the gateway redirects the dead session URL to `/session-ended`
+(EduIDE-Helm's `httproute-session-ended.yaml`), optionally with `/inactivity` or
+`/lifetime` appended by the IDE when it knows why. Without that route the student gets
+a bare Envoy 404 with no way back.
+
+`src/lastLaunch.ts` keeps the launch inputs in **sessionStorage, deliberately not
+localStorage**: `gitUri` can carry credentials and `artemisToken` is a bearer token, and
+the value only has to survive one same-tab navigation. Web Storage is partitioned by
+origin, so the session host cannot read it either way.
+
+Resume replays those inputs through `handleStartSession`, which reproduces the
+**deterministic workspace name** and therefore remounts the same volume. Never
+reimplement that naming - call the existing functions, or the student silently gets an
+empty workspace.
+
+Two traps:
+
+- **The `autoStart` effect fires on `appDef && gitUri && artemisToken`**, which is
+  exactly what rehydrating an Artemis descriptor sets. It is guarded on
+  `currentPage !== 'sessionEnded'`; remove that guard and the page launches on load,
+  bypassing the focus gate.
+- **Automatic resume requires the tab to be visible AND focused**, and stops after two
+  consecutive automatic resumes. Both exist so an abandoned tab cannot cycle pods.
 
 Nearly all logic is in `App.tsx`. Config load, URL parsing, Keycloak, workspace
 naming, launch and fallback all live there.
