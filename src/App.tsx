@@ -18,7 +18,11 @@ import { LoginButton } from './components/LoginButton';
 import { Privacy } from './components/Privacy';
 import { SelectApp } from './components/SelectApp';
 import { SelectBuildSystem } from './components/SelectBuildSystem';
+import type { SessionEndedReason } from './components/SessionEnded';
+import { SessionEnded } from './components/SessionEnded';
 import { VantaBackground } from './components/VantaBackground';
+import type { LaunchDescriptor } from './lastLaunch';
+import { clearLastLaunch, readLastLaunch, resetAutoResumeCount, saveLastLaunch } from './lastLaunch';
 
 // global state to be kept between render calls
 let initialized = false;
@@ -26,6 +30,25 @@ let initialAppName = '';
 let initialAppDefinition = '';
 let keycloakConfig: KeycloakConfig | undefined = undefined;
 const WORKSPACE_SEGMENT_LIMIT = 12;
+
+export type LandingPage = 'home' | 'imprint' | 'privacy' | 'sessionEnded';
+
+/**
+ * The launch inputs the workspace name is derived from.
+ *
+ * Resume passes these explicitly rather than pushing them through setState first: the setters do
+ * not update the values this render's handleStartSession closed over, so a launch fired straight
+ * after them would compute the workspace name from the OLD (empty) values and silently mount a
+ * brand-new empty workspace instead of the student's.
+ */
+interface LaunchInputs {
+    gitUri?: string;
+    gitUser?: string;
+    gitMail?: string;
+    artemisUrl?: string;
+    artemisToken?: string;
+    anonymousUser?: string;
+}
 
 function createDeterministicId(value: string): string {
     let hash = 0;
@@ -49,6 +72,28 @@ function sanitizeWorkspaceSegment(value: string | undefined, fallback: string): 
     return normalized.substring(0, Math.min(normalized.length, WORKSPACE_SEGMENT_LIMIT));
 }
 
+function pageFromPath(path: string): LandingPage {
+    if (path === '/imprint') {
+        return 'imprint';
+    }
+    if (path === '/privacy') {
+        return 'privacy';
+    }
+    if (path === '/session-ended' || path.startsWith('/session-ended/')) {
+        return 'sessionEnded';
+    }
+    return 'home';
+}
+
+/**
+ * The gateway can only redirect to a fixed path, so a bare /session-ended carries no reason. The
+ * IDE, which knows why the session is ending, appends one.
+ */
+function reasonFromPath(path: string): SessionEndedReason {
+    const reason = path.split('/')[2];
+    return reason === 'inactivity' || reason === 'lifetime' ? reason : undefined;
+}
+
 function getCurrentRedirectUri(): string {
     return window.location.href;
 }
@@ -57,19 +102,17 @@ function App(): React.JSX.Element {
     const [config] = useState<ExtendedTheiaCloudConfig | undefined>(() => getTheiaCloudConfig());
     const [error, setError] = useState<string>();
     const [loading, setLoading] = useState(false);
-    const [currentPage, setCurrentPage] = useState<'home' | 'imprint' | 'privacy'>('home');
+    // Resolved from the URL synchronously: if this defaulted to 'home', a first visit to
+    // /session-ended carrying appDef+gitUri+artemisToken would let the auto-start effect launch
+    // before the routing effect corrected the page.
+    const [currentPage, setCurrentPage] = useState<LandingPage>(() => pageFromPath(window.location.pathname));
+    const [sessionEndedReason, setSessionEndedReason] = useState<SessionEndedReason>(() => reasonFromPath(window.location.pathname));
 
     // Handle URL routing
     useEffect(() => {
         const updatePageFromUrl = (): void => {
-            const path = window.location.pathname;
-            if (path === '/imprint') {
-                setCurrentPage('imprint');
-            } else if (path === '/privacy') {
-                setCurrentPage('privacy');
-            } else {
-                setCurrentPage('home');
-            }
+            setCurrentPage(pageFromPath(window.location.pathname));
+            setSessionEndedReason(reasonFromPath(window.location.pathname));
         };
 
         // Initial load
@@ -84,8 +127,15 @@ function App(): React.JSX.Element {
     }, []);
 
     // Navigation handler that updates both state and URL
-    const handleNavigation = (page: 'home' | 'imprint' | 'privacy'): void => {
-        const path = page === 'home' ? '/' : `/${page}`;
+    const PAGE_PATHS: Record<LandingPage, string> = {
+        home: '/',
+        imprint: '/imprint',
+        privacy: '/privacy',
+        sessionEnded: '/session-ended'
+    };
+
+    const handleNavigation = (page: LandingPage): void => {
+        const path = PAGE_PATHS[page];
 
         // Update URL without page reload
         window.history.pushState({}, '', path);
@@ -247,15 +297,23 @@ function App(): React.JSX.Element {
     }
 
     const handleStartSession = useCallback(
-        (appDefinition: string, buildSystemId?: string): void => {
+        (appDefinition: string, buildSystemId?: string, overrides?: LaunchInputs): void => {
             setLoading(true);
             setError(undefined);
+
+            // Overrides win when resuming; otherwise the current state is the source of truth.
+            const launchGitUri = overrides?.gitUri ?? gitUri;
+            const launchGitUser = overrides?.gitUser ?? gitUser;
+            const launchGitMail = overrides?.gitMail ?? gitMail;
+            const launchArtemisUrl = overrides?.artemisUrl ?? artemisUrl;
+            const launchArtemisToken = overrides?.artemisToken ?? artemisToken;
+            const launchAnonymousUser = overrides?.anonymousUser ?? user;
 
             TheiaCloud.ping(PingRequest.create(config.serviceUrl, getServiceAuthToken(config)))
                 .then(() => {
                     // ping successful continue with launch
                     let workspace: string;
-                    const workspaceUser = config.useKeycloak ? username : user;
+                    const workspaceUser = config.useKeycloak ? username : launchAnonymousUser;
                     const workspaceUserSegment = sanitizeWorkspaceSegment(workspaceUser, 'user');
                     // Fold the selected build system (template) into the workspace identity so
                     // that, e.g., the Bazel and Make variants of the same app definition get
@@ -263,7 +321,7 @@ function App(): React.JSX.Element {
                     const appKey = buildSystemId ? `${appDefinition}-${buildSystemId}` : appDefinition;
                     const workspaceAppSegment = sanitizeWorkspaceSegment(appKey, 'app');
 
-                    if (!gitUri) {
+                    if (!launchGitUri) {
                         workspace =
                             'ws-' +
                             workspaceAppSegment +
@@ -273,7 +331,7 @@ function App(): React.JSX.Element {
                             createDeterministicId(`${workspaceUser}-${appKey}-playground`);
                         console.log(`Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`);
                     } else {
-                        const repoName = gitUri
+                        const repoName = launchGitUri
                             .split('/')
                             .pop()
                             ?.replace(/\.git$/, '');
@@ -286,7 +344,7 @@ function App(): React.JSX.Element {
                             '-' +
                             workspaceUserSegment +
                             '-' +
-                            createDeterministicId(`${gitUri}${buildSystemId ? `-${buildSystemId}` : ''}`);
+                            createDeterministicId(`${launchGitUri}${buildSystemId ? `-${buildSystemId}` : ''}`);
                         console.log(`Prepared persistent workspace ${workspace} for ${appDefinition}`);
                     }
 
@@ -297,27 +355,27 @@ function App(): React.JSX.Element {
                     };
 
                     const envFromMap: Record<string, string> = { THEIA: 'true' };
-                    if (artemisToken) {
-                        envFromMap.ARTEMIS_TOKEN = artemisToken;
+                    if (launchArtemisToken) {
+                        envFromMap.ARTEMIS_TOKEN = launchArtemisToken;
                     }
-                    if (artemisUrl) {
-                        envFromMap.ARTEMIS_URL = artemisUrl;
+                    if (launchArtemisUrl) {
+                        envFromMap.ARTEMIS_URL = launchArtemisUrl;
                     }
-                    if (gitUri) {
-                        envFromMap.GIT_URI = gitUri;
+                    if (launchGitUri) {
+                        envFromMap.GIT_URI = launchGitUri;
                     }
-                    if (gitUser) {
-                        envFromMap.GIT_USER = gitUser;
+                    if (launchGitUser) {
+                        envFromMap.GIT_USER = launchGitUser;
                     }
-                    if (gitMail) {
-                        envFromMap.GIT_MAIL = gitMail;
+                    if (launchGitMail) {
+                        envFromMap.GIT_MAIL = launchGitMail;
                     }
                     if (buildSystemId) {
                         envFromMap.TEMPLATE = buildSystemId;
                     }
 
                     const launchEnv = { fromMap: envFromMap };
-                    const launchUser = config.useKeycloak ? email! : user!;
+                    const launchUser = config.useKeycloak ? email! : launchAnonymousUser!;
                     const serviceAuthToken = getServiceAuthToken(config);
                     const createWorkspaceLaunchRequest = (): LaunchRequest => ({
                         ...LaunchRequest.createWorkspace(
@@ -353,32 +411,52 @@ function App(): React.JSX.Element {
                         return true;
                     };
 
+                    // Remember what this launch was, so that a session which later ends can be
+                    // resumed into the same workspace. The workspace name is derived from these
+                    // inputs, so reproducing them reproduces the volume.
+                    const attemptEphemeral = Boolean(config.useEphemeralStorage && !buildSystemId);
+                    const rememberLaunch = (ephemeral: boolean): void =>
+                        saveLastLaunch({
+                            appDefinition,
+                            appName:
+                                config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appDefinition)?.appName ??
+                                appDefinition,
+                            buildSystemId,
+                            gitUri: launchGitUri,
+                            gitUser: launchGitUser,
+                            gitMail: launchGitMail,
+                            artemisUrl: launchArtemisUrl,
+                            artemisToken: launchArtemisToken,
+                            anonymousUser: config.useKeycloak ? undefined : launchAnonymousUser,
+                            ephemeral
+                        });
+                    rememberLaunch(attemptEphemeral);
+
                     // `useEphemeralStorage` means "prefer ephemeral when possible".
                     // App definitions that require a shared workspace are retried with a PVC-backed workspace.
                     // Template launches always use workspace-backed sessions so that env vars
                     // are set directly on the container (eager/ephemeral sessions inject env
                     // vars via data bridge which arrives after the entrypoint has already run).
-                    const launchPromise =
-                        config.useEphemeralStorage && !buildSystemId
-                            ? (() => {
-                                  console.log(`Attempting ephemeral launch for ${appDefinition}`);
-                                  return TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions).catch(
-                                      (err: Error) => {
-                                          if (!isWorkspaceRequiredFallbackError(err)) {
-                                              throw err;
-                                          }
+                    const launchPromise = attemptEphemeral
+                        ? (() => {
+                              console.log(`Attempting ephemeral launch for ${appDefinition}`);
+                              return TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions).catch((err: Error) => {
+                                  if (!isWorkspaceRequiredFallbackError(err)) {
+                                      throw err;
+                                  }
 
-                                          console.log(
-                                              `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
-                                          );
-                                          return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
-                                      }
+                                  console.log(
+                                      `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
                                   );
-                              })()
-                            : (() => {
-                                  console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
+                                  // It is workspace-backed after all, so the work is resumable.
+                                  rememberLaunch(false);
                                   return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
-                              })();
+                              });
+                          })()
+                        : (() => {
+                              console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
+                              return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
+                          })();
 
                     launchPromise
                         .catch((err: Error) => {
@@ -387,6 +465,12 @@ function App(): React.JSX.Element {
                                     `The app definition '${appDefinition}' is not available in the cluster.\n` +
                                         'Please try launching another application.'
                                 );
+                                return;
+                            }
+                            if (err && (err as any).status === 553) {
+                                // The previous session is still terminating and still counts against the
+                                // per-user limit. Common when resuming straight after a timeout.
+                                setError('Your previous session is still shutting down.\n' + 'Please try again in a few seconds.');
                                 return;
                             }
                             setError(err.message);
@@ -432,6 +516,14 @@ function App(): React.JSX.Element {
             return;
         }
 
+        // On /session-ended the descriptor rehydrates exactly these three values, which would make
+        // this effect launch immediately - bypassing the focus gate and the auto-resume limit.
+        if (currentPage === 'sessionEnded') {
+            autoStartRequestedRef.current = false;
+            setAutoStart(false);
+            return;
+        }
+
         if (selectedAppDefinition && gitUri && artemisToken) {
             // authenticate();
             setAutoStart(true);
@@ -443,7 +535,7 @@ function App(): React.JSX.Element {
             autoStartRequestedRef.current = false;
             setAutoStart(false);
         }
-    }, [username, user, selectedAppDefinition, gitUri, artemisToken, handleStartSession, config.useKeycloak]);
+    }, [username, user, selectedAppDefinition, gitUri, artemisToken, handleStartSession, config.useKeycloak, currentPage]);
 
     /* eslint-enable react-hooks/rules-of-hooks */
 
@@ -497,6 +589,57 @@ function App(): React.JSX.Element {
             <div className='App'>
                 <VantaBackground>
                     <Privacy onNavigate={handleNavigation} />
+                </VantaBackground>
+            </div>
+        );
+    }
+
+    if (currentPage === 'sessionEnded') {
+        const descriptor = readLastLaunch();
+        const resumeSession = (toResume: LaunchDescriptor): void => {
+            // Hand the inputs straight to the launch. Going through setState would leave this
+            // render's handleStartSession closed over the old values and rebuild the workspace name
+            // from nothing, and navigating home first would let the auto-start effect fire a second
+            // launch. The descriptor is left in place until the new launch rewrites it, so a failed
+            // ping does not strip the student of their way back.
+            handleStartSession(toResume.appDefinition, toResume.buildSystemId, {
+                gitUri: toResume.gitUri,
+                gitUser: toResume.gitUser,
+                gitMail: toResume.gitMail,
+                artemisUrl: toResume.artemisUrl,
+                artemisToken: toResume.artemisToken,
+                anonymousUser: toResume.anonymousUser
+            });
+        };
+
+        return (
+            <div className='App'>
+                <VantaBackground>
+                    <Header
+                        email={config.useKeycloak ? email : undefined}
+                        authenticate={config.useKeycloak ? authenticate : undefined}
+                        logoutUrl={config.useKeycloak ? logoutUrl : undefined}
+                    />
+                    <div className='body'>
+                        {loading ? (
+                            <Loading logoFileExtension={logoFileExtension} text={config.loadingText} />
+                        ) : needsLogin ? (
+                            <LoginButton login={authenticate} />
+                        ) : (
+                            <SessionEnded
+                                reason={sessionEndedReason}
+                                descriptor={descriptor}
+                                onResume={resumeSession}
+                                onStartNew={() => {
+                                    resetAutoResumeCount();
+                                    clearLastLaunch();
+                                    handleNavigation('home');
+                                }}
+                            />
+                        )}
+                        <ErrorComponent message={error} />
+                    </div>
+                    <Footer selectedAppDefinition={''} onNavigate={handleNavigation} footerLinks={config.footerLinks} />
                 </VantaBackground>
             </div>
         );

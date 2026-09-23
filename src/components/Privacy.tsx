@@ -2,8 +2,10 @@ import './Privacy.css';
 
 import React from 'react';
 
+import type { LandingPage } from '../App';
+
 interface PrivacyProps {
-    onNavigate?: (page: 'home' | 'imprint' | 'privacy') => void;
+    onNavigate?: (page: LandingPage) => void;
 }
 
 export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => (
