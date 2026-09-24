@@ -62,10 +62,6 @@ default-selection validator checks `serviceAuthToken` only. So `?appDef=<id>`
 fails locally with `Invalid default selection value` and works in production.
 This is the most likely source of "works in prod, broken locally".
 
-### Keys the chart emits that nothing here reads
-
-`useGiteaOidc`, `giteaIssuerUrl`, `giteaClientId`. Zero references in `src/`.
-
 ### Keys typed here that the chart never emits
 
 `pageTitle` and `sentryDsn`, so the title is always the hardcoded default and
