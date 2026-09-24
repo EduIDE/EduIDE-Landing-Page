@@ -23,7 +23,17 @@ const FALLBACK: Required<PrivacyConfig> = {
     workspaceRetentionDays: 14,
     sessionMaxMinutes: 1440,
     sessionIdleMinutes: 60,
-    scientificUse: false
+    scientificUse: false,
+    controller: {
+        organisation: 'Example University',
+        representative: 'Prof. Dr. Example Person',
+        address: '1 Example Street, 00000 Example City',
+        email: 'privacy@example.edu'
+    },
+    dataProtectionOfficer: {
+        name: '',
+        email: 'dpo@example.edu'
+    }
 };
 
 const duration = (minutes: number, locale: 'de' | 'en'): string => {
@@ -46,7 +56,15 @@ const duration = (minutes: number, locale: 'de' | 'en'): string => {
 
 export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
     const config = getTheiaCloudConfig() as ExtendedTheiaCloudConfig | undefined;
-    const privacy: Required<PrivacyConfig> = { ...FALLBACK, ...(config?.privacy ?? {}) };
+    const configured = config?.privacy ?? {};
+    const privacy: Required<PrivacyConfig> = {
+        ...FALLBACK,
+        ...configured,
+        // Merged a level down: an installation that sets only `email` must keep
+        // the remaining fields rather than blanking them.
+        controller: { ...FALLBACK.controller, ...(configured.controller ?? {}) },
+        dataProtectionOfficer: { ...FALLBACK.dataProtectionOfficer, ...(configured.dataProtectionOfficer ?? {}) }
+    };
 
     return (
         <div className='privacy'>
@@ -63,15 +81,19 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
                     <div className='privacy__card'>
                         <h2>1. Verantwortliche Stelle / Data Controller</h2>
                         <p>
-                            Verantwortlich im Sinne der DSGVO ist die Technische Universität München (TUM), vertreten durch den Präsidenten.
-                            Bei datenschutzrechtlichen Fragen wenden Sie sich bitte an:
-                            <strong> beauftragter(at)datenschutz.tum.de</strong>
+                            Verantwortlich im Sinne der DSGVO ist {privacy.controller.organisation}, vertreten durch{' '}
+                            {privacy.controller.representative}
+                            {privacy.controller.address ? `, ${privacy.controller.address}` : ''}. Bei datenschutzrechtlichen Fragen wenden
+                            Sie sich bitte an:
+                            <strong> {privacy.controller.email}</strong>
                         </p>
                         <hr className='privacy__lang-divider' />
                         <p>
-                            The data controller within the meaning of the GDPR is the Technical University of Munich (TUM), represented by
-                            its President. For data protection enquiries please contact:
-                            <strong> beauftragter(at)datenschutz.tum.de</strong>
+                            The data controller within the meaning of the GDPR is {privacy.controller.organisation}, represented by{' '}
+                            {privacy.controller.representative}
+                            {privacy.controller.address ? `, ${privacy.controller.address}` : ''}. For data protection enquiries please
+                            contact:
+                            <strong> {privacy.controller.email}</strong>
                         </p>
                     </div>
 
@@ -267,13 +289,15 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
                     <div className='privacy__card'>
                         <h2>9. Datenschutzbeauftragter / Data Protection Officer</h2>
                         <p>
-                            Den Datenschutzbeauftragten der TUM erreichen Sie unter:
-                            <strong> datenschutz(at)tum.de</strong>
+                            Den Datenschutzbeauftragten
+                            {privacy.dataProtectionOfficer.name ? ` (${privacy.dataProtectionOfficer.name})` : ''} erreichen Sie unter:
+                            <strong> {privacy.dataProtectionOfficer.email}</strong>
                         </p>
                         <hr className='privacy__lang-divider' />
                         <p>
-                            TUM&apos;s Data Protection Officer can be reached at:
-                            <strong> datenschutz(at)tum.de</strong>
+                            The Data Protection Officer
+                            {privacy.dataProtectionOfficer.name ? ` (${privacy.dataProtectionOfficer.name})` : ''} can be reached at:
+                            <strong> {privacy.dataProtectionOfficer.email}</strong>
                         </p>
                     </div>
                 </div>

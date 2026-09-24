@@ -80,6 +80,23 @@ export interface PrivacyConfig {
     sessionIdleMinutes?: number;
     /** Whether anonymised usage data may also be used for scientific research. */
     scientificUse?: boolean;
+    /**
+     * Who is accountable for the data. Not derivable from anything - only the
+     * operator knows - so the chart ships obvious placeholders rather than a
+     * guess, and an unconfigured installation renders visibly unfilled instead
+     * of naming the wrong institution.
+     */
+    controller?: {
+        organisation?: string;
+        representative?: string;
+        address?: string;
+        email?: string;
+    };
+    /** The data protection officer, a distinct contact point under the GDPR. */
+    dataProtectionOfficer?: {
+        name?: string;
+        email?: string;
+    };
 }
 
 /**
