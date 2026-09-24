@@ -20,20 +20,29 @@ interface PrivacyProps {
 const FALLBACK: Required<PrivacyConfig> = {
     workspacePersistent: false,
     workspaceGarbageCollected: true,
-    workspaceRetentionDays: 14,
+    workspaceRetentionSeconds: 1209600,
     sessionMaxMinutes: 1440,
     sessionIdleMinutes: 60,
     scientificUse: false,
-    controller: {
-        organisation: 'Example University',
-        representative: 'Prof. Dr. Example Person',
-        address: '1 Example Street, 00000 Example City',
-        email: 'privacy@example.edu'
-    },
-    dataProtectionOfficer: {
-        name: '',
-        email: 'dpo@example.edu'
+    // Empty, never a plausible-looking example. An unconfigured installation
+    // must say so rather than print a contact that goes nowhere.
+    controller: { organisation: '', representative: '', address: '', email: '' },
+    dataProtectionOfficer: { name: '', email: '' }
+};
+
+const retention = (seconds: number, locale: 'de' | 'en'): string => {
+    const days = seconds / 86400;
+    if (days >= 1) {
+        // Only show a fraction when there is one, so 150 does not become "150.0".
+        const n = Number.isInteger(days) ? String(days) : days.toFixed(1);
+        const de = n.replace('.', ',');
+        return locale === 'de' ? `${de} Tagen` : `${n} days`;
     }
+    const hours = Math.round(seconds / 3600);
+    if (locale === 'de') {
+        return hours === 1 ? 'einer Stunde' : `${hours} Stunden`;
+    }
+    return hours === 1 ? '1 hour' : `${hours} hours`;
 };
 
 const duration = (minutes: number, locale: 'de' | 'en'): string => {
@@ -66,6 +75,9 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
         dataProtectionOfficer: { ...FALLBACK.dataProtectionOfficer, ...(configured.dataProtectionOfficer ?? {}) }
     };
 
+    const hasController = Boolean(privacy.controller.organisation && privacy.controller.email);
+    const hasOfficer = Boolean(privacy.dataProtectionOfficer.email);
+
     return (
         <div className='privacy'>
             <div className='privacy__container'>
@@ -80,21 +92,37 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
                 <div className='privacy__content'>
                     <div className='privacy__card'>
                         <h2>1. Verantwortliche Stelle / Data Controller</h2>
-                        <p>
-                            Verantwortlich im Sinne der DSGVO ist {privacy.controller.organisation}, vertreten durch{' '}
-                            {privacy.controller.representative}
-                            {privacy.controller.address ? `, ${privacy.controller.address}` : ''}. Bei datenschutzrechtlichen Fragen wenden
-                            Sie sich bitte an:
-                            <strong> {privacy.controller.email}</strong>
-                        </p>
-                        <hr className='privacy__lang-divider' />
-                        <p>
-                            The data controller within the meaning of the GDPR is {privacy.controller.organisation}, represented by{' '}
-                            {privacy.controller.representative}
-                            {privacy.controller.address ? `, ${privacy.controller.address}` : ''}. For data protection enquiries please
-                            contact:
-                            <strong> {privacy.controller.email}</strong>
-                        </p>
+                        {hasController ? (
+                            <>
+                                <p>
+                                    Verantwortlich im Sinne der DSGVO ist {privacy.controller.organisation}
+                                    {privacy.controller.representative ? `, vertreten durch ${privacy.controller.representative}` : ''}
+                                    {privacy.controller.address ? `, ${privacy.controller.address}` : ''}. Bei datenschutzrechtlichen Fragen
+                                    wenden Sie sich bitte an:
+                                    <strong> {privacy.controller.email}</strong>
+                                </p>
+                                <hr className='privacy__lang-divider' />
+                                <p>
+                                    The data controller within the meaning of the GDPR is {privacy.controller.organisation}
+                                    {privacy.controller.representative ? `, represented by ${privacy.controller.representative}` : ''}
+                                    {privacy.controller.address ? `, ${privacy.controller.address}` : ''}. For data protection enquiries
+                                    please contact:
+                                    <strong> {privacy.controller.email}</strong>
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <p>
+                                    <strong>Für diese Installation wurde keine verantwortliche Stelle hinterlegt.</strong> Wenden Sie sich
+                                    bitte an den Betreiber dieses Dienstes, bevor Sie personenbezogene Daten übermitteln.
+                                </p>
+                                <hr className='privacy__lang-divider' />
+                                <p>
+                                    <strong>No data controller has been configured for this installation.</strong> Please contact the
+                                    operator of this service before submitting any personal data.
+                                </p>
+                            </>
+                        )}
                     </div>
 
                     <div className='privacy__card'>
@@ -220,14 +248,20 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
                                 <li>
                                     Workspace-Daten bleiben über das Sitzungsende hinaus erhalten
                                     {privacy.workspaceGarbageCollected
-                                        ? ` und werden ${privacy.workspaceRetentionDays} Tage nach der letzten Sitzung gelöscht.`
+                                        ? ` und werden ${retention(
+                                              privacy.workspaceRetentionSeconds,
+                                              'de'
+                                          )} nach der letzten Sitzung gelöscht.`
                                         : ' und werden nicht automatisch gelöscht.'}
                                 </li>
                             ) : (
                                 <li>
                                     Workspace-Daten werden mit dem Sitzungsende verworfen
                                     {privacy.workspaceGarbageCollected
-                                        ? `; verbleibende Workspace-Objekte werden nach ${privacy.workspaceRetentionDays} Tagen entfernt.`
+                                        ? `; verbleibende Workspace-Objekte werden nach ${retention(
+                                              privacy.workspaceRetentionSeconds,
+                                              'de'
+                                          )} entfernt.`
                                         : '.'}
                                 </li>
                             )}
@@ -243,14 +277,17 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
                                 <li>
                                     Workspace data is kept beyond the end of the session
                                     {privacy.workspaceGarbageCollected
-                                        ? ` and is deleted ${privacy.workspaceRetentionDays} days after the last session.`
+                                        ? ` and is deleted ${retention(privacy.workspaceRetentionSeconds, 'en')} after the last session.`
                                         : ' and is not deleted automatically.'}
                                 </li>
                             ) : (
                                 <li>
                                     Workspace data is discarded when the session ends
                                     {privacy.workspaceGarbageCollected
-                                        ? `; any remaining workspace records are removed after ${privacy.workspaceRetentionDays} days.`
+                                        ? `; any remaining workspace records are removed after ${retention(
+                                              privacy.workspaceRetentionSeconds,
+                                              'en'
+                                          )}.`
                                         : '.'}
                                 </li>
                             )}
@@ -288,17 +325,35 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
 
                     <div className='privacy__card'>
                         <h2>9. Datenschutzbeauftragter / Data Protection Officer</h2>
-                        <p>
-                            Den Datenschutzbeauftragten
-                            {privacy.dataProtectionOfficer.name ? ` (${privacy.dataProtectionOfficer.name})` : ''} erreichen Sie unter:
-                            <strong> {privacy.dataProtectionOfficer.email}</strong>
-                        </p>
-                        <hr className='privacy__lang-divider' />
-                        <p>
-                            The Data Protection Officer
-                            {privacy.dataProtectionOfficer.name ? ` (${privacy.dataProtectionOfficer.name})` : ''} can be reached at:
-                            <strong> {privacy.dataProtectionOfficer.email}</strong>
-                        </p>
+                        {hasOfficer ? (
+                            <>
+                                <p>
+                                    Den Datenschutzbeauftragten
+                                    {privacy.dataProtectionOfficer.name ? ` (${privacy.dataProtectionOfficer.name})` : ''} erreichen Sie
+                                    unter:
+                                    <strong> {privacy.dataProtectionOfficer.email}</strong>
+                                </p>
+                                <hr className='privacy__lang-divider' />
+                                <p>
+                                    The Data Protection Officer
+                                    {privacy.dataProtectionOfficer.name ? ` (${privacy.dataProtectionOfficer.name})` : ''} can be reached
+                                    at:
+                                    <strong> {privacy.dataProtectionOfficer.email}</strong>
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <p>
+                                    <strong>Für diese Installation wurde kein Datenschutzbeauftragter hinterlegt.</strong> Der Betreiber
+                                    dieses Dienstes nennt Ihnen die zuständige Stelle.
+                                </p>
+                                <hr className='privacy__lang-divider' />
+                                <p>
+                                    <strong>No data protection officer has been configured for this installation.</strong> The operator of
+                                    this service can name the responsible contact.
+                                </p>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>

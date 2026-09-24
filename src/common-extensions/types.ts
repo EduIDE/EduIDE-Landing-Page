@@ -72,8 +72,12 @@ export interface PrivacyConfig {
     workspacePersistent?: boolean;
     /** False when no garbage collector runs, so workspaces are not reaped on a schedule. */
     workspaceGarbageCollected?: boolean;
-    /** Days a workspace is kept after its last session. */
-    workspaceRetentionDays?: number;
+    /**
+     * Seconds a workspace is kept after its last session. Seconds rather than
+     * days so a TTL that is not a whole number of days is not rounded down into
+     * a retention claim shorter than the deployment actually keeps.
+     */
+    workspaceRetentionSeconds?: number;
     /** Hard cap on a single session, in minutes. */
     sessionMaxMinutes?: number;
     /** Idle minutes after which a session is shut down. */
