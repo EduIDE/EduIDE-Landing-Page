@@ -119,11 +119,16 @@ export const Privacy: React.FC<PrivacyProps> = ({ onNavigate }) => {
                     <div className='privacy__card'>
                         <h2>3. Zweck der Verarbeitung / Purpose</h2>
                         <p>
-                            Die Daten werden ausschließlich zur Bereitstellung der browserbasierten IDE-Lernumgebung für Lehrveranstaltungen
-                            der TUM verarbeitet.
+                            {privacy.scientificUse
+                                ? 'Die Daten werden zur Bereitstellung der browserbasierten IDE-Lernumgebung für Lehrveranstaltungen der TUM verarbeitet. Darüber hinaus werden anonymisierte Nutzungsdaten für wissenschaftliche Forschungsprojekte ausgewertet; siehe Abschnitt 5.'
+                                : 'Die Daten werden ausschließlich zur Bereitstellung der browserbasierten IDE-Lernumgebung für Lehrveranstaltungen der TUM verarbeitet.'}
                         </p>
                         <hr className='privacy__lang-divider' />
-                        <p>Data is processed solely to provide the browser-based IDE learning environment for TUM programming courses.</p>
+                        <p>
+                            {privacy.scientificUse
+                                ? 'Data is processed to provide the browser-based IDE learning environment for TUM programming courses. Anonymised usage data is additionally analysed for scientific research projects; see section 5.'
+                                : 'Data is processed solely to provide the browser-based IDE learning environment for TUM programming courses.'}
+                        </p>
                     </div>
 
                     <div className='privacy__card'>
