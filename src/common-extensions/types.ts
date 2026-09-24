@@ -55,6 +55,34 @@ export type ExtendedAppDefinition = AppDefinition & {
 };
 
 /**
+ * What the privacy page may state about this installation.
+ *
+ * Every field except scientificUse is derived by the Helm chart from the value
+ * that actually produces the behaviour - the garbage collector's WORKSPACE_TTL,
+ * landingPage.ephemeralStorage, appDefinitions.defaults.timeout. They are not
+ * restated anywhere, so a retention change cannot leave this page asserting the
+ * old figure.
+ *
+ * All fields are optional: an installation running an older chart sends none of
+ * them, and the page falls back to the TUM production values it has always
+ * shown.
+ */
+export interface PrivacyConfig {
+    /** False when the workspace volume is discarded together with the session. */
+    workspacePersistent?: boolean;
+    /** False when no garbage collector runs, so workspaces are not reaped on a schedule. */
+    workspaceGarbageCollected?: boolean;
+    /** Days a workspace is kept after its last session. */
+    workspaceRetentionDays?: number;
+    /** Hard cap on a single session, in minutes. */
+    sessionMaxMinutes?: number;
+    /** Idle minutes after which a session is shut down. */
+    sessionIdleMinutes?: number;
+    /** Whether anonymised usage data may also be used for scientific research. */
+    scientificUse?: boolean;
+}
+
+/**
  * Extended TheiaCloudConfig with additional EduIDE properties
  * Uses intersection type since TheiaCloudConfig is a type alias
  */
@@ -65,6 +93,7 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
     sentryEnable?: boolean;
     sentryEnvironment?: string;
     sentryDsn?: string;
+    privacy?: PrivacyConfig;
 };
 
 /**
