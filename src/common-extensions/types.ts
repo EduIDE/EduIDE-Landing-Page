@@ -114,6 +114,7 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
     sentryEnable?: boolean;
     sentryEnvironment?: string;
     sentryDsn?: string;
+    sentryTracesSampleRate?: number;
     privacy?: PrivacyConfig;
 };
 
