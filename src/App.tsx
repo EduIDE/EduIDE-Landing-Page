@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ExtendedAppDefinition, ExtendedTheiaCloudConfig } from './common-extensions/types';
 import { getServiceAuthToken } from './common-extensions/types';
 import { AppLogo } from './components/AppLogo';
+import { ConfirmIdentity } from './components/ConfirmIdentity';
 import { ErrorComponent } from './components/ErrorComponent';
 import { Footer } from './components/Footer';
 import { Header } from './components/Header';
@@ -118,6 +119,10 @@ function App(): React.JSX.Element {
     const [token, setToken] = useState<string>();
     const [logoutUrl, setLogoutUrl] = useState<string>();
     const [user, setUser] = useState<string>();
+    // In anonymous mode the workspace identity must be confirmed before use.
+    // suggestedUser holds the (untrusted) value proposed via `?user=`.
+    const [identityConfirmed, setIdentityConfirmed] = useState<boolean>(false);
+    const [suggestedUser, setSuggestedUser] = useState<string>();
 
     const [gitUri, setGitUri] = useState<string>();
     const [gitUser, setGitUser] = useState<string>();
@@ -199,18 +204,25 @@ function App(): React.JSX.Element {
             }
         }
 
-        // Get user parameter from URL (for anonymous mode when Keycloak is disabled).
-        if (urlParams.has('user')) {
-            const userParam = urlParams.get('user');
+        // Workspace identity for anonymous mode (Keycloak disabled).
+        //
+        // The `?user=` query parameter is untrusted: because the persistent
+        // workspace is addressed deterministically from the identity, silently
+        // adopting `?user=<victim>` would drop the visitor into the victim's
+        // workspace. So we do NOT auto-adopt it. If it is present we surface it
+        // for explicit confirmation (see ConfirmIdentity); if it is absent we
+        // mint a fresh random anonymous identity, which is not spoofable and
+        // therefore needs no confirmation. With Keycloak enabled the identity
+        // comes from the verified token and this gate does not apply.
+        if (!config.useKeycloak) {
+            const userParam = urlParams.get('user')?.trim();
             if (userParam) {
-                setUser(userParam);
+                setSuggestedUser(userParam);
+            } else {
+                const randomId = Math.random().toString(36).substring(2, 10);
+                setUser(`anonymous-${randomId}`);
+                setIdentityConfirmed(true);
             }
-        }
-
-        // Set default user for anonymous mode when Keycloak is disabled
-        if (!config.useKeycloak && !urlParams.has('user')) {
-            const randomId = Math.random().toString(36).substring(2, 10);
-            setUser(`anonymous-${randomId}`);
         }
 
         if (config.useKeycloak) {
@@ -422,12 +434,23 @@ function App(): React.JSX.Element {
         }
     };
 
+    const handleConfirmIdentity = (confirmedUser: string): void => {
+        setUser(confirmedUser);
+        setIdentityConfirmed(true);
+    };
+
     useEffect(() => {
         if (!initialized) {
             return;
         }
 
         if (config.useKeycloak && !username) {
+            autoStartRequestedRef.current = false;
+            return;
+        }
+
+        // Do not auto-launch in anonymous mode until the identity is confirmed.
+        if (!config.useKeycloak && !identityConfirmed) {
             autoStartRequestedRef.current = false;
             return;
         }
@@ -443,7 +466,7 @@ function App(): React.JSX.Element {
             autoStartRequestedRef.current = false;
             setAutoStart(false);
         }
-    }, [username, user, selectedAppDefinition, gitUri, artemisToken, handleStartSession, config.useKeycloak]);
+    }, [username, user, selectedAppDefinition, gitUri, artemisToken, handleStartSession, config.useKeycloak, identityConfirmed]);
 
     /* eslint-enable react-hooks/rules-of-hooks */
 
@@ -480,6 +503,7 @@ function App(): React.JSX.Element {
     };
 
     const needsLogin = config.useKeycloak && !token;
+    const needsIdentityConfirmation = !config.useKeycloak && !identityConfirmed;
     const logoFileExtension = config.logoFileExtension ?? 'svg';
 
     if (currentPage === 'imprint') {
@@ -524,15 +548,19 @@ function App(): React.JSX.Element {
                                 <h2 className='App__title'>
                                     {needsLogin
                                         ? 'Login to use EduIDE'
-                                        : autoStart
-                                          ? 'Launch your Online IDE'
-                                          : standaloneWizardStep === 'buildSystem'
-                                            ? 'Choose your build system'
-                                            : 'Choose your programming language'}
+                                        : needsIdentityConfirmation
+                                          ? 'Confirm your identity'
+                                          : autoStart
+                                            ? 'Launch your Online IDE'
+                                            : standaloneWizardStep === 'buildSystem'
+                                              ? 'Choose your build system'
+                                              : 'Choose your programming language'}
                                 </h2>
                                 <div>
                                     {needsLogin ? (
                                         <LoginButton login={authenticate} />
+                                    ) : needsIdentityConfirmation ? (
+                                        <ConfirmIdentity suggestedUser={suggestedUser ?? ''} onConfirm={handleConfirmIdentity} />
                                     ) : autoStart ? (
                                         <LaunchApp
                                             appName={selectedAppName}
