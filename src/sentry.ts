@@ -21,7 +21,11 @@ export function initializeSentry(): void {
 
     const dsn = config.sentryDsn?.trim() || DEFAULT_SENTRY_DSN;
     const tracePropagationTargets = getTracePropagationTargets(config.serviceUrl);
-    const tracesSampleRate = typeof config.sentryTracesSampleRate === 'number' ? config.sentryTracesSampleRate : DEFAULT_TRACES_SAMPLE_RATE;
+    const configuredSampleRate = config.sentryTracesSampleRate;
+    const tracesSampleRate =
+        typeof configuredSampleRate === 'number' && Number.isFinite(configuredSampleRate) && configuredSampleRate >= 0 && configuredSampleRate <= 1
+            ? configuredSampleRate
+            : DEFAULT_TRACES_SAMPLE_RATE;
 
     Sentry.init({
         dsn,
@@ -92,8 +96,15 @@ function scrubTransaction(event: Sentry.Event): Sentry.Event {
     if (event.spans) {
         for (const span of event.spans) {
             const data = span.data as Record<string, unknown> | undefined;
-            if (data && typeof data['http.url'] === 'string') {
-                data['http.url'] = scrubUrl(data['http.url'] as string);
+            if (data) {
+                for (const key of ['http.url', 'url.full', 'url']) {
+                    if (typeof data[key] === 'string') {
+                        data[key] = scrubUrl(data[key] as string);
+                    }
+                }
+                if (typeof data['http.query'] === 'string') {
+                    data['http.query'] = scrubQuery(data['http.query'] as string);
+                }
             }
             if (typeof span.description === 'string' && span.description.includes('?')) {
                 span.description = scrubUrl(span.description);
@@ -101,6 +112,19 @@ function scrubTransaction(event: Sentry.Event): Sentry.Event {
         }
     }
     return event;
+}
+
+// Redact sensitive parameters from a query string. Browser tracing stores the
+// query on its own span attribute (`http.query`), including the leading `?`.
+function scrubQuery(value: string): string {
+    const prefix = value.startsWith('?') ? '?' : '';
+    const params = new URLSearchParams(value.slice(prefix.length));
+    for (const key of SENSITIVE_QUERY_PARAMS) {
+        if (params.has(key)) {
+            params.set(key, REDACTED);
+        }
+    }
+    return prefix + params.toString();
 }
 
 function getTracePropagationTargets(serviceUrl: string): (string | RegExp)[] {
