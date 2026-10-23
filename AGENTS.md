@@ -92,12 +92,28 @@ present — the Artemis flow never sets `TEMPLATE`.
 
 ## URL parameters are a second config channel
 
-`appDef`, `gitUri`, `gitUser`, `gitMail`, `artemisUrl`, `artemisToken`, `user`.
-They become session environment variables whose names are a contract with the
-IDE image's entrypoint, not with this repo.
+`appDef`, `gitUri`, `gitRef`, `source`, `gitUser`, `gitMail`, `artemisUrl`,
+`artemisToken`, `user`. They become session environment variables (`GIT_REF`
+and `GIT_SOURCE` for the two git ones) whose names are a contract with the IDE
+image's entrypoint and Scorpio, not with this repo.
 
-`gitUri` is cloned verbatim with no credential injection, so a private repo
-needs credentials in the URL. **Treat it as secret-bearing.**
+**A `gitUri` without an `artemisToken`** (the "Open in EduIDE" browser
+extension) can come from anywhere, so it is checked before anything starts
+(`src/common-extensions/git-launch.ts`): HTTPS only, no credentials in the URL,
+and only hosts in `allowedGitHosts` (default `github.com`). A link that fails
+shows the reason and nothing else. One that names a valid `appDef` gets a
+confirmation button ("Open owner/repo in Java 17") instead of the picker, and
+never starts by itself: only Artemis links, whose token proves their origin,
+auto-start.
+
+`sessionEnv` (config) is merged into every launch's environment first, so a
+launch's own variables win. It carries per-installation settings such as
+Scorpio's `SCORPIO_GITHUB_CLIENT_ID`; only string values with
+environment-variable names are passed on.
+
+An Artemis `gitUri` is cloned verbatim and carries the student's VCS token.
+**Treat it as secret-bearing.** Private GitHub repositories never put
+credentials in the link; Scorpio signs the student in inside the session.
 
 ## Auth
 
