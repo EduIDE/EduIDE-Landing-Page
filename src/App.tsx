@@ -4,6 +4,14 @@ import { getTheiaCloudConfig, LaunchRequest, PingRequest, RequestOptions, TheiaC
 import Keycloak, { KeycloakConfig } from 'keycloak-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+    checkGitLaunchUri,
+    DEFAULT_ALLOWED_GIT_HOSTS,
+    repositoryName,
+    sanitizeGitRef,
+    sanitizeGitSource,
+    sessionEnvFromConfig
+} from './common-extensions/git-launch';
 import type { ExtendedAppDefinition, ExtendedTheiaCloudConfig } from './common-extensions/types';
 import { getServiceAuthToken } from './common-extensions/types';
 import { AppLogo } from './components/AppLogo';
@@ -124,6 +132,13 @@ function App(): React.JSX.Element {
     const [gitMail, setGitMail] = useState<string>();
     const [artemisToken, setArtemisToken] = useState<string>();
     const [artemisUrl, setArtemisUrl] = useState<string>();
+    const [gitRef, setGitRef] = useState<string>();
+    const [gitSource, setGitSource] = useState<string>();
+    // The link named a valid app (?appDef=), so a git link can be confirmed with one click instead of the picker.
+    const [appDefFromLink, setAppDefFromLink] = useState(false);
+    const [showGitPicker, setShowGitPicker] = useState(false);
+    // A git link without an Artemis token that must not be launched (unknown host, credentials, not HTTPS).
+    const [launchBlocked, setLaunchBlocked] = useState(false);
 
     const [autoStart, setAutoStart] = useState<boolean>(false);
     const autoStartRequestedRef = useRef(false);
@@ -153,6 +168,7 @@ function App(): React.JSX.Element {
                     setSelectedAppDefinition(pathBlueprintSelection);
                     setSelectedAppName(pathBlueprintSelection);
                 }
+                setAppDefFromLink(true);
             } else {
                 setError('Invalid default selection value: ' + pathBlueprintSelection);
                 console.error('Invalid default selection value: ' + pathBlueprintSelection);
@@ -164,6 +180,19 @@ function App(): React.JSX.Element {
             const gitUriParam = urlParams.get('gitUri');
             if (gitUriParam) {
                 setGitUri(gitUriParam);
+            }
+        }
+
+        setGitRef(sanitizeGitRef(urlParams.get('gitRef') ?? undefined));
+        setGitSource(sanitizeGitSource(urlParams.get('source') ?? undefined));
+
+        // A git link without an Artemis token can come from anywhere, so it is checked before anything starts.
+        const linkGitUri = urlParams.get('gitUri');
+        if (linkGitUri && !urlParams.get('artemisToken')) {
+            const problem = checkGitLaunchUri(linkGitUri, config.allowedGitHosts ?? DEFAULT_ALLOWED_GIT_HOSTS);
+            if (problem) {
+                setError(problem);
+                setLaunchBlocked(true);
             }
         }
 
@@ -296,7 +325,8 @@ function App(): React.JSX.Element {
                         accessToken: token
                     };
 
-                    const envFromMap: Record<string, string> = { THEIA: 'true' };
+                    // Installation-wide variables first, so a launch's own values win.
+                    const envFromMap: Record<string, string> = { ...sessionEnvFromConfig(config.sessionEnv), THEIA: 'true' };
                     if (artemisToken) {
                         envFromMap.ARTEMIS_TOKEN = artemisToken;
                     }
@@ -311,6 +341,12 @@ function App(): React.JSX.Element {
                     }
                     if (gitMail) {
                         envFromMap.GIT_MAIL = gitMail;
+                    }
+                    if (gitRef) {
+                        envFromMap.GIT_REF = gitRef;
+                    }
+                    if (gitSource) {
+                        envFromMap.GIT_SOURCE = gitSource;
                     }
                     if (buildSystemId) {
                         envFromMap.TEMPLATE = buildSystemId;
@@ -403,7 +439,7 @@ function App(): React.JSX.Element {
                     setLoading(false);
                 });
         },
-        [config, gitUri, username, user, token, artemisToken, artemisUrl, gitUser, gitMail, email]
+        [config, gitUri, gitRef, gitSource, username, user, token, artemisToken, artemisUrl, gitUser, gitMail, email]
     );
 
     const handleAppSelected = (appId: string, _: string): void => {
@@ -502,6 +538,10 @@ function App(): React.JSX.Element {
         );
     }
 
+    const gitRepository = repositoryName(gitUri);
+    // A git link that names an app: one confirmation click, never an automatic start.
+    const confirmGitLaunch = !autoStart && !!gitUri && !artemisToken && appDefFromLink && !showGitPicker;
+
     const standaloneAppBuildSystems =
         config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === standaloneAppDef)?.buildSystems ?? [];
 
@@ -526,13 +566,34 @@ function App(): React.JSX.Element {
                                         ? 'Login to use EduIDE'
                                         : autoStart
                                           ? 'Launch your Online IDE'
-                                          : standaloneWizardStep === 'buildSystem'
-                                            ? 'Choose your build system'
-                                            : 'Choose your programming language'}
+                                          : confirmGitLaunch
+                                            ? `Open ${gitRepository ?? 'the repository'}`
+                                            : standaloneWizardStep === 'buildSystem'
+                                              ? 'Choose your build system'
+                                              : gitRepository && !artemisToken
+                                                ? `Choose the programming language for ${gitRepository}`
+                                                : 'Choose your programming language'}
                                 </h2>
                                 <div>
-                                    {needsLogin ? (
+                                    {launchBlocked ? undefined : needsLogin ? (
                                         <LoginButton login={authenticate} />
+                                    ) : confirmGitLaunch ? (
+                                        <div>
+                                            <LaunchApp
+                                                appName={selectedAppName}
+                                                appDefinition={selectedAppDefinition}
+                                                onStartSession={handleStartSession}
+                                                label={`Open ${gitRepository ?? 'the repository'} in ${selectedAppName}`}
+                                            />
+                                            {config.useEphemeralStorage && (
+                                                <p className='App__git-note'>
+                                                    Changes are lost when the session ends unless you push them.
+                                                </p>
+                                            )}
+                                            <button className='App__link-button' onClick={() => setShowGitPicker(true)}>
+                                                Choose another language
+                                            </button>
+                                        </div>
                                     ) : autoStart ? (
                                         <LaunchApp
                                             appName={selectedAppName}
