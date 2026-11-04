@@ -68,6 +68,10 @@ function scrubEvent<T extends Sentry.Event>(event: T): T {
     if (event.request?.query_string) {
         event.request.query_string = REDACTED;
     }
+    // Sentry copies document.referrer here, and it can be a secret-bearing URL.
+    if (event.request?.headers) {
+        delete event.request.headers.Referer;
+    }
     if (event.breadcrumbs) {
         for (const crumb of event.breadcrumbs) {
             const data = crumb.data;
@@ -84,8 +88,22 @@ function scrubEvent<T extends Sentry.Event>(event: T): T {
     return event;
 }
 
+function scrubUrlAttributes(data: Record<string, unknown>): void {
+    for (const key of ['http.url', 'url.full', 'url']) {
+        if (typeof data[key] === 'string') {
+            data[key] = scrubUrl(data[key] as string);
+        }
+    }
+}
+
 function scrubTransaction(event: Sentry.Event): Sentry.Event {
     scrubEvent(event);
+
+    // The pageload span's attributes end up here, including the full page URL.
+    const traceData = event.contexts?.trace?.data;
+    if (traceData) {
+        scrubUrlAttributes(traceData);
+    }
 
     // Transaction names from browser tracing are URLs; drop any query string so
     // a secret-bearing parameter never becomes the transaction identity.
@@ -97,11 +115,7 @@ function scrubTransaction(event: Sentry.Event): Sentry.Event {
         for (const span of event.spans) {
             const data = span.data as Record<string, unknown> | undefined;
             if (data) {
-                for (const key of ['http.url', 'url.full', 'url']) {
-                    if (typeof data[key] === 'string') {
-                        data[key] = scrubUrl(data[key] as string);
-                    }
-                }
+                scrubUrlAttributes(data);
                 if (typeof data['http.query'] === 'string') {
                     data['http.query'] = scrubQuery(data['http.query'] as string);
                 }
