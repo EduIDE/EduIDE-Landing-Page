@@ -219,6 +219,44 @@
     letter-spacing: 1px;
 }
 
+.App__confirm-identity {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    color: var(--color-text-primary);
+    background: var(--color-background-card);
+    border: 1px solid var(--color-border);
+    border-radius: 16px;
+    backdrop-filter: blur(5px);
+    line-height: 1.5em;
+}
+
+.App__confirm-identity-name {
+    color: var(--color-text-secondary);
+    word-break: break-all;
+}
+
+.App__confirm-identity-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-family: 'Anonymous Pro', monospace;
+    font-size: 1rem;
+    color: var(--color-text-primary);
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.App__confirm-identity-input:focus {
+    border-color: var(--color-border-hover);
+}
+
 .App__error-message {
     width: 60vw;
     line-height: 1.5em;
