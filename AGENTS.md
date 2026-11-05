@@ -8,7 +8,8 @@ React SPA served by nginx.
 ## Layout
 
 ```
-src/App.tsx                    576 lines, and effectively the whole application
+src/App.tsx                    most of the application: config, URL parsing, Keycloak, launch
+src/launch.ts                  workspace naming, launch env, trusted hosts, launch retries
 src/common-extensions/types.ts the EduIDE-specific config surface
 src/components/                15 presentational components
 src/sentry.ts                  reads the config a second time, before React mounts
@@ -16,8 +17,8 @@ public/config.js               DEVELOPMENT ONLY - see below
 nginx.conf                     serves config.js uncached; SPA fallback for /imprint, /privacy
 ```
 
-Nearly all logic is in `App.tsx`. Config load, URL parsing, Keycloak, workspace
-naming, launch and fallback all live there.
+Most logic is in `App.tsx`. The rules that are easiest to get wrong are plain
+functions in `src/launch.ts`.
 
 ## Commands
 
@@ -59,13 +60,10 @@ If the config fails validation the app renders a bare
 `FATAL: Theia Cloud configuration could not be found.` That string means a
 malformed or missing `config.js`, nothing else.
 
-### The dev config and the chart disagree, and it bites
+### The dev config and the chart differ
 
-`public/config.js` writes `appId:`; the chart emits `serviceAuthToken:`. Most
-code reads `a.serviceAuthToken || a.appId` and tolerates either — but the
-default-selection validator checks `serviceAuthToken` only. So `?appDef=<id>`
-fails locally with `Invalid default selection value` and works in production.
-This is the most likely source of "works in prod, broken locally".
+`public/config.js` writes `appId:`; the chart emits `serviceAuthToken:`. All code
+must read `a.serviceAuthToken || a.appId` to work with either.
 
 ### Keys typed here that the chart never emits
 
@@ -89,7 +87,7 @@ the chart. The chart's field is `label`; it arrives here as `appName`.
 
 | Field | Behaviour |
 |---|---|
-| `visible` | defaults to shown. Only an explicit `false` hides an app — and a hidden app is still launchable via `?appDef=` |
+| `visible` | defaults to shown. Only an explicit `false` hides an app. A hidden app can still be launched by a link with `?appDef=`, `gitUri` and `artemisToken` |
 | `buildSystems` | the picker appears only with **2 or more**. With exactly one it is auto-selected silently |
 | `image` | resolves to a logo path; absent means it is derived from `appName` |
 
@@ -112,7 +110,12 @@ They become session environment variables whose names are a contract with the
 IDE image's entrypoint, not with this repo.
 
 `gitUri` is cloned verbatim with no credential injection, so a private repo
-needs credentials in the URL. **Treat it as secret-bearing.**
+needs credentials in the URL. **Treat it as secret-bearing.** `nginx.conf` logs
+paths without the query for this reason; keep it that way.
+
+**A token in a link proves nothing**, because anyone can write one. A link with
+`gitUri` and `artemisToken` shows a Launch button, and only starts by itself when
+the hosts of both `gitUri` and `artemisUrl` are in `trustedArtemisHosts`.
 
 ## Auth
 
@@ -140,7 +143,11 @@ config.
 - **Module-level mutable state** guards one-time initialisation, and hooks are
   called after an early return behind an eslint disable. Fragile under
   StrictMode's double invocation. Do not restructure casually.
-- `index.html` points its Open Graph and Twitter meta tags at a **test host**.
+- **Launch requests retry only on 502, 503, 504 and timeouts**, in `launchWithRetry`.
+  The gateway cuts requests off after 60s (`gateway.serviceRouteRequestTimeout`)
+  while a slow session keeps starting, so a later request picks it up.
+- The image runs nginx without root on **port 8080**, with a read-only filesystem
+  in the chart. Only `/tmp` is writable.
 - The footer hardcodes a version string; the real one comes from the chart.
 - The legal pages are hardcoded TUM/GDPR content, partly German. Content, not
   code, and legally sensitive.

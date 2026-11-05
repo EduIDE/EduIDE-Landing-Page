@@ -20,35 +20,17 @@ import { Privacy } from './components/Privacy';
 import { SelectApp } from './components/SelectApp';
 import { SelectBuildSystem } from './components/SelectBuildSystem';
 import { VantaBackground } from './components/VantaBackground';
+import { createAnonymousUser, createLaunchEnv, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
 
 // global state to be kept between render calls
 let initialized = false;
 let initialAppName = '';
 let initialAppDefinition = '';
 let keycloakConfig: KeycloakConfig | undefined = undefined;
-const WORKSPACE_SEGMENT_LIMIT = 12;
-
-function createDeterministicId(value: string): string {
-    let hash = 0;
-
-    for (let i = 0; i < value.length; i += 1) {
-        hash = (hash << 5) - hash + value.charCodeAt(i);
-        hash |= 0;
-    }
-
-    return Math.abs(hash).toString(16).padStart(8, '0');
-}
-
-function sanitizeWorkspaceSegment(value: string | undefined, fallback: string): string {
-    const sanitized = (value ?? '')
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, '-')
-        .replace(/^-+/, '')
-        .replace(/-+$/, '');
-
-    const normalized = sanitized.length > 0 ? sanitized : fallback;
-    return normalized.substring(0, Math.min(normalized.length, WORKSPACE_SEGMENT_LIMIT));
-}
+// Holds the signed-in client, so a launch can refresh its token.
+let keycloakClient: Keycloak | undefined = undefined;
+// Matches the gateway's request timeout (gateway.serviceRouteRequestTimeout in the chart).
+const LAUNCH_REQUEST_TIMEOUT = 60000;
 
 function getCurrentRedirectUri(): string {
     return window.location.href;
@@ -63,7 +45,7 @@ function App(): React.JSX.Element {
     // Handle URL routing
     useEffect(() => {
         const updatePageFromUrl = (): void => {
-            const path = window.location.pathname;
+            const path = window.location.pathname.replace(/\/+$/, '');
             if (path === '/imprint') {
                 setCurrentPage('imprint');
             } else if (path === '/privacy') {
@@ -88,8 +70,8 @@ function App(): React.JSX.Element {
     const handleNavigation = (page: 'home' | 'imprint' | 'privacy'): void => {
         const path = page === 'home' ? '/' : `/${page}`;
 
-        // Update URL without page reload
-        window.history.pushState({}, '', path);
+        // Keep the query: a later login returns to this URL, and it holds the exercise link.
+        window.history.pushState({}, '', path + window.location.search);
 
         // Update state
         setCurrentPage(page);
@@ -131,6 +113,7 @@ function App(): React.JSX.Element {
     const [artemisUrl, setArtemisUrl] = useState<string>();
 
     const [autoStart, setAutoStart] = useState<boolean>(false);
+    const [invalidAppDef, setInvalidAppDef] = useState<boolean>(false);
     const autoStartRequestedRef = useRef(false);
 
     const [standaloneWizardStep, setStandaloneWizardStep] = useState<'language' | 'buildSystem'>('language');
@@ -159,6 +142,7 @@ function App(): React.JSX.Element {
                     setSelectedAppName(pathBlueprintSelection);
                 }
             } else {
+                setInvalidAppDef(true);
                 setError('Invalid default selection value: ' + pathBlueprintSelection);
                 console.error('Invalid default selection value: ' + pathBlueprintSelection);
             }
@@ -219,8 +203,7 @@ function App(): React.JSX.Element {
             if (userParam) {
                 setSuggestedUser(userParam);
             } else {
-                const randomId = Math.random().toString(36).substring(2, 10);
-                setUser(`anonymous-${randomId}`);
+                setUser(createAnonymousUser());
                 setIdentityConfirmed(true);
             }
         }
@@ -241,14 +224,7 @@ function App(): React.JSX.Element {
                 })
                 .then(authenticated => {
                     if (authenticated) {
-                        const parsedToken = keycloak.idTokenParsed;
-                        if (parsedToken) {
-                            const userMail = parsedToken.email;
-                            setToken(keycloak.idToken);
-                            setEmail(userMail);
-                            setUsername(parsedToken.preferred_username ?? userMail);
-                            setLogoutUrl(keycloak.createLogoutUrl());
-                        }
+                        applyLogin(keycloak);
                     }
                 })
                 .catch(() => {
@@ -258,124 +234,87 @@ function App(): React.JSX.Element {
         initialized = true;
     }
 
+    const applyLogin = (client: Keycloak): void => {
+        const parsedToken = client.idTokenParsed;
+        if (parsedToken) {
+            const userMail = parsedToken.email;
+            keycloakClient = client;
+            setToken(client.idToken);
+            setEmail(userMail);
+            setUsername(parsedToken.preferred_username ?? userMail);
+            setLogoutUrl(client.createLogoutUrl());
+        }
+    };
+
     const handleStartSession = useCallback(
         (appDefinition: string, buildSystemId?: string): void => {
             setLoading(true);
             setError(undefined);
 
-            TheiaCloud.ping(PingRequest.create(config.serviceUrl, getServiceAuthToken(config)))
-                .then(() => {
-                    // ping successful continue with launch
-                    let workspace: string;
-                    const workspaceUser = config.useKeycloak ? username : user;
-                    const workspaceUserSegment = sanitizeWorkspaceSegment(workspaceUser, 'user');
-                    // Fold the selected build system (template) into the workspace identity so
-                    // that, e.g., the Bazel and Make variants of the same app definition get
-                    // separate persistent workspaces instead of sharing (and merging) one.
-                    const appKey = buildSystemId ? `${appDefinition}-${buildSystemId}` : appDefinition;
-                    const workspaceAppSegment = sanitizeWorkspaceSegment(appKey, 'app');
+            const launchSession = (accessToken: string | undefined): void => {
+                TheiaCloud.ping(PingRequest.create(config.serviceUrl, getServiceAuthToken(config)))
+                    .then(() => {
+                        // ping successful continue with launch
+                        const workspaceUser = config.useKeycloak ? username : user;
+                        const workspace = createWorkspaceName(appDefinition, buildSystemId, workspaceUser, gitUri);
 
-                    if (!gitUri) {
-                        workspace =
-                            'ws-' +
-                            workspaceAppSegment +
-                            '-playground-' +
-                            workspaceUserSegment +
-                            '-' +
-                            createDeterministicId(`${workspaceUser}-${appKey}-playground`);
-                        console.log(`Prepared persistent workspace ${workspace} for ${appDefinition} (playground fallback)`);
-                    } else {
-                        const repoName = gitUri
-                            .split('/')
-                            .pop()
-                            ?.replace(/\.git$/, '');
-                        const repoSegment = sanitizeWorkspaceSegment(repoName, 'repo');
-                        workspace =
-                            'ws-' +
-                            workspaceAppSegment +
-                            '-' +
-                            repoSegment +
-                            '-' +
-                            workspaceUserSegment +
-                            '-' +
-                            createDeterministicId(`${gitUri}${buildSystemId ? `-${buildSystemId}` : ''}`);
-                        console.log(`Prepared persistent workspace ${workspace} for ${appDefinition}`);
-                    }
+                        const requestOptions: RequestOptions = {
+                            timeout: LAUNCH_REQUEST_TIMEOUT,
+                            retries: 0,
+                            accessToken
+                        };
 
-                    const requestOptions: RequestOptions = {
-                        timeout: 60000,
-                        retries: 5,
-                        accessToken: token
-                    };
+                        const envFromMap = createLaunchEnv({ artemisToken, artemisUrl, gitUri, gitUser, gitMail, buildSystemId });
 
-                    const envFromMap: Record<string, string> = { THEIA: 'true' };
-                    if (artemisToken) {
-                        envFromMap.ARTEMIS_TOKEN = artemisToken;
-                    }
-                    if (artemisUrl) {
-                        envFromMap.ARTEMIS_URL = artemisUrl;
-                    }
-                    if (gitUri) {
-                        envFromMap.GIT_URI = gitUri;
-                    }
-                    if (gitUser) {
-                        envFromMap.GIT_USER = gitUser;
-                    }
-                    if (gitMail) {
-                        envFromMap.GIT_MAIL = gitMail;
-                    }
-                    if (buildSystemId) {
-                        envFromMap.TEMPLATE = buildSystemId;
-                    }
+                        const launchEnv = { fromMap: envFromMap };
+                        const launchUser = config.useKeycloak ? (email ?? username)! : user!;
+                        const serviceAuthToken = getServiceAuthToken(config);
+                        const createWorkspaceLaunchRequest = (): LaunchRequest => ({
+                            ...LaunchRequest.createWorkspace(
+                                config.serviceUrl,
+                                serviceAuthToken,
+                                appDefinition,
+                                undefined,
+                                launchUser,
+                                workspace
+                            ),
+                            env: launchEnv
+                        });
+                        const createEphemeralLaunchRequest = (): LaunchRequest => ({
+                            ...LaunchRequest.ephemeral(config.serviceUrl, serviceAuthToken, appDefinition, undefined, launchUser),
+                            env: launchEnv
+                        });
 
-                    const launchEnv = { fromMap: envFromMap };
-                    const launchUser = config.useKeycloak ? email! : user!;
-                    const serviceAuthToken = getServiceAuthToken(config);
-                    const createWorkspaceLaunchRequest = (): LaunchRequest => ({
-                        ...LaunchRequest.createWorkspace(
-                            config.serviceUrl,
-                            serviceAuthToken,
-                            appDefinition,
-                            undefined,
-                            launchUser,
-                            workspace
-                        ),
-                        env: launchEnv
-                    });
-                    const createEphemeralLaunchRequest = (): LaunchRequest => ({
-                        ...LaunchRequest.ephemeral(config.serviceUrl, serviceAuthToken, appDefinition, undefined, launchUser),
-                        env: launchEnv
-                    });
+                        const isWorkspaceRequiredFallbackError = (err: Error): boolean => {
+                            const status = (err as any)?.status;
+                            const serverReason = (err as any)?.serverError?.reason;
+                            const request = (err as any)?.request;
 
-                    const isWorkspaceRequiredFallbackError = (err: Error): boolean => {
-                        const status = (err as any)?.status;
-                        const serverReason = (err as any)?.serverError?.reason;
-                        const request = (err as any)?.request;
+                            if (status !== 400 || request?.kind !== LaunchRequest.KIND || request?.ephemeral !== true) {
+                                return false;
+                            }
 
-                        if (status !== 400 || request?.kind !== LaunchRequest.KIND || request?.ephemeral !== true) {
-                            return false;
-                        }
+                            if (typeof serverReason === 'string') {
+                                return serverReason.includes('workspace-backed session');
+                            }
 
-                        if (typeof serverReason === 'string') {
-                            return serverReason.includes('workspace-backed session');
-                        }
+                            // Some service deployments currently return this rejection as an unstructured 400
+                            // without a JSON reason body, so we fall back to a workspace-backed launch.
+                            return true;
+                        };
 
-                        // Some service deployments currently return this rejection as an unstructured 400
-                        // without a JSON reason body, so we fall back to a workspace-backed launch.
-                        return true;
-                    };
-
-                    // `useEphemeralStorage` means "prefer ephemeral when possible".
-                    // App definitions that require a shared workspace are retried with a PVC-backed workspace.
-                    // Template launches always use workspace-backed sessions so that env vars
-                    // are set directly on the container (eager/ephemeral sessions inject env
-                    // vars via data bridge which arrives after the entrypoint has already run).
-                    const launchPromise =
-                        config.useEphemeralStorage && !buildSystemId
-                            ? (() => {
-                                  console.log(`Attempting ephemeral launch for ${appDefinition}`);
-                                  return TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions).catch(
-                                      (err: Error) => {
+                        // `useEphemeralStorage` means "prefer ephemeral when possible".
+                        // App definitions that require a shared workspace are retried with a PVC-backed workspace.
+                        // Template launches always use workspace-backed sessions so that env vars
+                        // are set directly on the container (eager/ephemeral sessions inject env
+                        // vars via data bridge which arrives after the entrypoint has already run).
+                        const launchPromise =
+                            config.useEphemeralStorage && !buildSystemId
+                                ? (() => {
+                                      console.log(`Attempting ephemeral launch for ${appDefinition}`);
+                                      return launchWithRetry(() =>
+                                          TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions)
+                                      ).catch((err: Error) => {
                                           if (!isWorkspaceRequiredFallbackError(err)) {
                                               throw err;
                                           }
@@ -383,39 +322,55 @@ function App(): React.JSX.Element {
                                           console.log(
                                               `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
                                           );
-                                          return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
-                                      }
-                                  );
-                              })()
-                            : (() => {
-                                  console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
-                                  return TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions);
-                              })();
+                                          return launchWithRetry(() =>
+                                              TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
+                                          );
+                                      });
+                                  })()
+                                : (() => {
+                                      console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
+                                      return launchWithRetry(() =>
+                                          TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
+                                      );
+                                  })();
 
-                    launchPromise
-                        .catch((err: Error) => {
-                            if (err && (err as any).status === 473) {
-                                setError(
-                                    `The app definition '${appDefinition}' is not available in the cluster.\n` +
-                                        'Please try launching another application.'
-                                );
-                                return;
-                            }
-                            setError(err.message);
-                        })
-                        .finally(() => {
-                            setLoading(false);
-                        });
-                })
-                .catch((_err: Error) => {
-                    setError(
-                        'Sorry, we are performing some maintenance at the moment.\n' +
-                            "Please try again later. Usually maintenance won't last longer than 60 minutes.\n\n"
-                    );
-                    setLoading(false);
-                });
+                        launchPromise
+                            .catch((err: Error) => {
+                                if (err && (err as any).status === 473) {
+                                    setError(
+                                        `The app definition '${appDefinition}' is not available in the cluster.\n` +
+                                            'Please try launching another application.'
+                                    );
+                                    return;
+                                }
+                                setError(err.message);
+                            })
+                            .finally(() => {
+                                setLoading(false);
+                            });
+                    })
+                    .catch((_err: Error) => {
+                        setError(
+                            'Sorry, we are performing some maintenance at the moment.\n' +
+                                "Please try again later. Usually maintenance won't last longer than 60 minutes.\n\n"
+                        );
+                        setLoading(false);
+                    });
+            };
+
+            // A page left open outlives the login token, so refresh it right before using it.
+            const accessTokenPromise = keycloakClient
+                ? keycloakClient.updateToken(30).then(() => keycloakClient?.idToken)
+                : Promise.resolve(undefined);
+
+            accessTokenPromise.then(launchSession, () => {
+                keycloakClient = undefined;
+                setToken(undefined);
+                setError('Your login has expired. Please log in again.');
+                setLoading(false);
+            });
         },
-        [config, gitUri, username, user, token, artemisToken, artemisUrl, gitUser, gitMail, email]
+        [config, gitUri, username, user, artemisToken, artemisUrl, gitUser, gitMail, email]
     );
 
     const handleAppSelected = (appId: string, _: string): void => {
@@ -455,10 +410,10 @@ function App(): React.JSX.Element {
             return;
         }
 
-        if (selectedAppDefinition && gitUri && artemisToken) {
-            // authenticate();
+        if (selectedAppDefinition && gitUri && artemisToken && !invalidAppDef) {
             setAutoStart(true);
-            if (!autoStartRequestedRef.current) {
+            // Anyone can write a link with a token in it, so only trusted hosts start without a click.
+            if (!autoStartRequestedRef.current && isTrustedArtemisLink(gitUri, artemisUrl, config.trustedArtemisHosts)) {
                 autoStartRequestedRef.current = true;
                 handleStartSession(selectedAppDefinition);
             }
@@ -466,7 +421,19 @@ function App(): React.JSX.Element {
             autoStartRequestedRef.current = false;
             setAutoStart(false);
         }
-    }, [username, user, selectedAppDefinition, gitUri, artemisToken, handleStartSession, config.useKeycloak, identityConfirmed]);
+    }, [
+        username,
+        user,
+        selectedAppDefinition,
+        gitUri,
+        artemisToken,
+        artemisUrl,
+        invalidAppDef,
+        handleStartSession,
+        config.useKeycloak,
+        config.trustedArtemisHosts,
+        identityConfirmed
+    ]);
 
     /* eslint-enable react-hooks/rules-of-hooks */
 
@@ -486,14 +453,7 @@ function App(): React.JSX.Element {
                         redirectUri: getCurrentRedirectUri()
                     });
                 } else {
-                    const parsedToken = keycloak.idTokenParsed;
-                    if (parsedToken) {
-                        const userMail = parsedToken.email;
-                        setToken(keycloak.idToken);
-                        setEmail(userMail);
-                        setUsername(parsedToken.preferred_username ?? userMail);
-                        setLogoutUrl(keycloak.createLogoutUrl());
-                    }
+                    applyLogin(keycloak);
                 }
             })
             .catch(() => {
@@ -539,7 +499,7 @@ function App(): React.JSX.Element {
                 />
                 <div className='body'>
                     {loading ? (
-                        <Loading logoFileExtension={logoFileExtension} text={config.loadingText} />
+                        <Loading text={config.loadingText} />
                     ) : (
                         <div>
                             <div>
@@ -565,6 +525,7 @@ function App(): React.JSX.Element {
                                         <LaunchApp
                                             appName={selectedAppName}
                                             appDefinition={selectedAppDefinition}
+                                            gitUri={gitUri}
                                             onStartSession={handleStartSession}
                                         />
                                     ) : standaloneWizardStep === 'buildSystem' ? (
@@ -600,7 +561,7 @@ function isDefaultSelectionValueValid(defaultSelection: string, appDefinition: s
         return true;
     }
     if (additionalApps && additionalApps.length > 0) {
-        return additionalApps.some(def => def.serviceAuthToken === defaultSelection);
+        return additionalApps.some(def => (def.serviceAuthToken || def.appId) === defaultSelection);
     }
     // If there are no additional apps explicitly configured, we accept any app definition given via url parameter
     return true;

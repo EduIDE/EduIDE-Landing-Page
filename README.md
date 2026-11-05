@@ -54,7 +54,7 @@ The built files will be in the `dist/` directory.
 docker build -t ghcr.io/EduIDE/eduidec-landing-page:latest .
 
 # Run the container
-docker run -d -p 80:80 ghcr.io/EduIDE/eduidec-landing-page:latest
+docker run -d -p 80:8080 ghcr.io/EduIDE/eduidec-landing-page:latest
 ```
 
 ## Configuration
@@ -124,6 +124,7 @@ window.theiaCloudConfig = {
 | `sentryEnable` | boolean | No | Enable Sentry browser monitoring. Defaults to off and also needs `sentryDsn` |
 | `sentryEnvironment` | string | No | Sentry environment tag, e.g. namespace or deployment name |
 | `sentryDsn` | string | No | Sentry endpoint to report to. There is no built-in default |
+| `trustedArtemisHosts` | array | No | Hosts whose Artemis links start a session without a click. Both `gitUri` and `artemisUrl` must match. Default: none |
 | `additionalApps` | array | No | Additional apps to display |
 | `footerLinks` | object | No | Footer link configuration |
 

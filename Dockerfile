@@ -19,7 +19,7 @@ RUN npm run build && \
     (chmod 644 /app/dist/favicon.ico || true)
 
 # Production stage
-FROM nginx:stable-alpine AS production
+FROM nginxinc/nginx-unprivileged:stable-alpine AS production
 
 # Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
@@ -27,5 +27,5 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Copy built static files
 COPY --from=build /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

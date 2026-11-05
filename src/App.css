@@ -219,6 +219,15 @@
     letter-spacing: 1px;
 }
 
+.App__launch-source {
+    width: fit-content;
+    margin: 0 auto 1rem;
+    padding: 0.5rem 1rem;
+    color: var(--color-text-primary);
+    background: var(--color-background-card);
+    border-radius: 10px;
+}
+
 .App__confirm-identity {
     display: flex;
     flex-direction: column;
