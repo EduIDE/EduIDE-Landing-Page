@@ -13,7 +13,7 @@ Landing page for EduIDE Cloud workspace management, providing a user-friendly in
 
 ## Prerequisites
 
-- **Node.js**: >= 20.19.0 (required by Vite 8)
+- **Node.js**: >= 26.0.0
 - **npm**: Latest stable version
 - **Docker** (for containerized deployment): Docker with Buildx support for multi-arch builds
 
@@ -287,7 +287,7 @@ npm run lint:fix
 
 **Docker Build Fails**:
 - Ensure Docker daemon is running
-- Check Node.js version (>= 20.0.0)
+- Check Node.js version (>= 26.0.0)
 - Verify `package-lock.json` is present
 
 **404 Errors in Production**:

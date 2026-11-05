@@ -146,5 +146,4 @@ config.
 - Explicit return types on non-expression functions; it is a warning, and
   warnings are fatal.
 - Release tags are `vX.Y.Z`; the image tag is the same string without the `v`.
-- `eslint-plugin-header` is installed but no header rule is configured. There
-  are no license banners; do not add them expecting the linter to want them.
+- There are no license banners; do not add them.
