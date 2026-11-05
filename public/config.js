@@ -59,9 +59,9 @@ window.theiaCloudConfig = {
   infoTitle: '',
   loadingText: 'Preparing your personal Online IDE...',
   logoFileExtension: 'png',
-  sentryEnable: true,
+  // Sentry stays off unless sentryEnable is true and sentryDsn is set.
+  sentryEnable: false,
   sentryEnvironment: 'local',
-  // Optional override. If unset, the default EduIDE Sentry DSN is used.
   // sentryDsn: 'https://examplePublicKey@sentry.example.com/123',
   // Footer links configuration
   // All footer links are optional - if not provided, default values will be used

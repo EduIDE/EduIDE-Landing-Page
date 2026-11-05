@@ -3,7 +3,6 @@ import * as Sentry from '@sentry/react';
 
 import type { ExtendedTheiaCloudConfig } from './common-extensions/types';
 
-const DEFAULT_SENTRY_DSN = 'https://a3851baf2ece0c6bec13e1c99fd3111f@sentry.aet.cit.tum.de/13';
 const DEFAULT_TRACES_SAMPLE_RATE = 0.2;
 
 // Query parameters that may carry secrets (credentials, tokens) and must never
@@ -15,11 +14,16 @@ const REDACTED = '[Filtered]';
 export function initializeSentry(): void {
     const config = getTheiaCloudConfig() as ExtendedTheiaCloudConfig | undefined;
 
-    if (!config?.sentryEnable) {
+    if (config?.sentryEnable !== true) {
         return;
     }
 
-    const dsn = config.sentryDsn?.trim() || DEFAULT_SENTRY_DSN;
+    const dsn = config.sentryDsn?.trim();
+    if (!dsn) {
+        console.warn('Sentry stays disabled: sentryEnable is set, but sentryDsn is missing.');
+        return;
+    }
+
     const tracePropagationTargets = getTracePropagationTargets(config.serviceUrl);
     const configuredSampleRate = config.sentryTracesSampleRate;
     const tracesSampleRate =

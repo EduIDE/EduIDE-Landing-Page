@@ -64,8 +64,13 @@ This is the most likely source of "works in prod, broken locally".
 
 ### Keys typed here that the chart never emits
 
-`pageTitle` and `sentryDsn`, so the title is always the hardcoded default and
-Sentry always uses the hardcoded DSN in `src/sentry.ts`.
+`pageTitle`, so the title is always the hardcoded default.
+
+## Sentry is off by default
+
+`src/sentry.ts` only starts Sentry when `sentryEnable` is `true` and `sentryDsn`
+is set. There is no built-in DSN. The chart emits both from
+`landingPage.sentry.enable` and `landingPage.sentry.dsn`.
 
 ## The app list is a contract with the chart
 
