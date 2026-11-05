@@ -118,10 +118,10 @@ config.
 - **Two live logo directories.** `public/assets/logos/` is used by the app list
   and `index.html`; `public/images/logos/` is used by exactly one component.
   Neither is dead.
-- **`three` and `vanta` in `package.json` are not what runs.** The background
-  reads globals loaded from a CDN in `index.html`, at a different version.
-  Bumping the npm packages has no runtime effect; the animated background also
-  depends on outbound CDN access at runtime.
+- **The page loads nothing from third-party hosts by itself.** No CDN scripts,
+  web fonts or avatar services: keep it that way, because `nginx.conf` sets a CSP
+  that blocks them. The only cross-origin requests go to the service, Keycloak
+  and Sentry hosts from `config.js`.
 - **Module-level mutable state** guards one-time initialisation, and hooks are
   called after an early return behind an eslint disable. Fragile under
   StrictMode's double invocation. Do not restructure casually.
