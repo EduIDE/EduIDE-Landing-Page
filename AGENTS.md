@@ -10,11 +10,12 @@ React SPA served by nginx.
 ```
 src/App.tsx                    most of the application: config, URL parsing, Keycloak, launch
 src/launch.ts                  workspace naming, launch env, trusted hosts, launch retries
+src/lastLaunch.ts              what the last launch in this tab used, so /session-ended can resume it
 src/common-extensions/types.ts the EduIDE-specific config surface
-src/components/                15 presentational components
+src/components/                16 presentational components
 src/sentry.ts                  reads the config a second time, before React mounts
 public/config.js               DEVELOPMENT ONLY - see below
-nginx.conf                     serves config.js uncached; SPA fallback for /imprint, /privacy
+nginx.conf                     serves config.js uncached; SPA fallback for /imprint, /privacy, /session-ended
 ```
 
 Most logic is in `App.tsx`. The rules that are easiest to get wrong are plain
@@ -116,6 +117,27 @@ paths without the query for this reason; keep it that way.
 **A token in a link proves nothing**, because anyone can write one. A link with
 `gitUri` and `artemisToken` shows a Launch button, and only starts by itself when
 the hosts of both `gitUri` and `artemisUrl` are in `trustedArtemisHosts`.
+
+## /session-ended
+
+EduIDE-Helm redirects any request for a session that no longer exists to
+`/session-ended` (the catch-all rule on the instances HTTPRoute). The page says
+the session ended and offers **Resume**, which launches again with the inputs
+stored by `src/lastLaunch.ts`. Those inputs produce the same workspace name, so
+the same volume is mounted again.
+
+- The inputs live in **sessionStorage, not localStorage**: `gitUri` and
+  `artemisToken` are secret-bearing, and they only have to survive the redirect
+  back in the same tab. They expire after 24 hours.
+- Resume always takes a click. Starting by itself would bring back exactly the
+  idle sessions the inactivity timeout removes, so the auto-start effect skips
+  this page.
+- Resume hands the inputs straight to `handleStartSession`. Setting them as state
+  first does not reach the callback in time, and the workspace name comes out
+  different: an empty workspace instead of the student's.
+- An ephemeral session has no volume, so the page offers only a fresh start.
+- The page does not know **why** the session ended: the gateway redirect carries
+  no reason.
 
 ## Auth
 
