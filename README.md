@@ -195,6 +195,7 @@ EduIDE-Landing-Page/
 │   │   ├── LoginButton.tsx
 │   │   ├── Privacy.tsx
 │   │   ├── SelectApp.tsx
+│   │   ├── SessionEnded.tsx # /session-ended: explains an ended session, offers to resume it
 │   │   ├── Spinner.tsx
 │   │   └── ThemeToggle.tsx
 │   ├── contexts/            # React contexts
