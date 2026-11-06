@@ -50,7 +50,6 @@ export type ExtendedAppDefinition = AppDefinition & {
     serviceAuthToken?: string;
     buildSystems?: BuildSystemOption[];
     image?: string;
-    Image?: string;
     visible?: boolean;
 };
 
@@ -114,7 +113,10 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
     sentryEnable?: boolean;
     sentryEnvironment?: string;
     sentryDsn?: string;
+    sentryTracesSampleRate?: number;
     privacy?: PrivacyConfig;
+    /** Hosts whose Artemis links may start a session without a click. */
+    trustedArtemisHosts?: string[];
 };
 
 /**

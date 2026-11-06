@@ -8,7 +8,8 @@ React SPA served by nginx.
 ## Layout
 
 ```
-src/App.tsx                    576 lines, and effectively the whole application
+src/App.tsx                    most of the application: config, URL parsing, Keycloak, launch
+src/launch.ts                  workspace naming, launch env, trusted hosts, launch retries
 src/common-extensions/types.ts the EduIDE-specific config surface
 src/components/                15 presentational components
 src/sentry.ts                  reads the config a second time, before React mounts
@@ -16,24 +17,29 @@ public/config.js               DEVELOPMENT ONLY - see below
 nginx.conf                     serves config.js uncached; SPA fallback for /imprint, /privacy
 ```
 
-Nearly all logic is in `App.tsx`. Config load, URL parsing, Keycloak, workspace
-naming, launch and fallback all live there.
+Most logic is in `App.tsx`. The rules that are easiest to get wrong are plain
+functions in `src/launch.ts`.
 
 ## Commands
 
 ```bash
 npm run dev          # http://localhost:5173
+npm test             # vitest run
 npm run build        # tsc && vite build
 npm run typecheck
 npm run lint         # --max-warnings 0, so warnings are fatal
 npm run format
 ```
 
-There are no tests, no test runner and no test dependency.
+Tests sit next to the code in `src/` and run on Vitest with jsdom and React
+Testing Library. They mock only what crosses the process boundary: `keycloak-js`,
+`TheiaCloud` from `@eclipse-theiacloud/common`, and the Sentry transport. `App.tsx`
+has module-level state, so `App.test.tsx` re-imports it for every test. An
+`it.fails` marks a known bug: fixing the bug makes that test fail, so turn it into
+a plain `it`.
 
-**Only the build runs in CI.** `npm run lint`, `typecheck` and `format:check`
-never run — the Docker build's `npm run build` is the sole gate, so type errors
-fail CI and lint and formatting violations do not. Run them yourself.
+**CI runs `npm run lint` and `npm test`.** The Docker build's `npm run build`
+covers type errors. `format:check` never runs, so run it yourself.
 
 ## How configuration reaches the app
 
@@ -54,18 +60,25 @@ If the config fails validation the app renders a bare
 `FATAL: Theia Cloud configuration could not be found.` That string means a
 malformed or missing `config.js`, nothing else.
 
-### The dev config and the chart disagree, and it bites
+### The dev config and the chart differ
 
-`public/config.js` writes `appId:`; the chart emits `serviceAuthToken:`. Most
-code reads `a.serviceAuthToken || a.appId` and tolerates either — but the
-default-selection validator checks `serviceAuthToken` only. So `?appDef=<id>`
-fails locally with `Invalid default selection value` and works in production.
-This is the most likely source of "works in prod, broken locally".
+`public/config.js` writes `appId:`; the chart emits `serviceAuthToken:`. All code
+must read `a.serviceAuthToken || a.appId` to work with either.
 
 ### Keys typed here that the chart never emits
 
-`pageTitle` and `sentryDsn`, so the title is always the hardcoded default and
-Sentry always uses the hardcoded DSN in `src/sentry.ts`.
+`pageTitle`, so the title is always the hardcoded default.
+
+## Sentry is off by default
+
+`src/sentry.ts` only starts Sentry when `sentryEnable` is `true` and `sentryDsn`
+is set. There is no built-in DSN. The chart emits both from
+`landingPage.sentry.enable` and `landingPage.sentry.dsn`.
+
+`traceLifecycle: 'static'` is load-bearing. Sentry 11 streams spans by default,
+and streamed spans skip `beforeSendTransaction`, which would send the Keycloak
+`#code=...` fragment unscrubbed. `src/sentry.test.ts` checks this against real
+envelopes.
 
 ## The app list is a contract with the chart
 
@@ -74,7 +87,7 @@ the chart. The chart's field is `label`; it arrives here as `appName`.
 
 | Field | Behaviour |
 |---|---|
-| `visible` | defaults to shown. Only an explicit `false` hides an app — and a hidden app is still launchable via `?appDef=` |
+| `visible` | defaults to shown. Only an explicit `false` hides an app. A hidden app can still be launched by a link with `?appDef=`, `gitUri` and `artemisToken` |
 | `buildSystems` | the picker appears only with **2 or more**. With exactly one it is auto-selected silently |
 | `image` | resolves to a logo path; absent means it is derived from `appName` |
 
@@ -97,7 +110,12 @@ They become session environment variables whose names are a contract with the
 IDE image's entrypoint, not with this repo.
 
 `gitUri` is cloned verbatim with no credential injection, so a private repo
-needs credentials in the URL. **Treat it as secret-bearing.**
+needs credentials in the URL. **Treat it as secret-bearing.** `nginx.conf` logs
+paths without the query for this reason; keep it that way.
+
+**A token in a link proves nothing**, because anyone can write one. A link with
+`gitUri` and `artemisToken` shows a Launch button, and only starts by itself when
+the hosts of both `gitUri` and `artemisUrl` are in `trustedArtemisHosts`.
 
 ## Auth
 
@@ -118,15 +136,20 @@ config.
 - **Two live logo directories.** `public/assets/logos/` is used by the app list
   and `index.html`; `public/images/logos/` is used by exactly one component.
   Neither is dead.
-- **`three` and `vanta` in `package.json` are not what runs.** The background
-  reads globals loaded from a CDN in `index.html`, at a different version.
-  Bumping the npm packages has no runtime effect; the animated background also
-  depends on outbound CDN access at runtime.
+- **The page loads nothing from third-party hosts by itself.** No CDN scripts,
+  web fonts or avatar services: keep it that way, because `nginx.conf` sets a CSP
+  that blocks them. The only cross-origin requests go to the service, Keycloak
+  and Sentry hosts from `config.js`.
 - **Module-level mutable state** guards one-time initialisation, and hooks are
   called after an early return behind an eslint disable. Fragile under
   StrictMode's double invocation. Do not restructure casually.
-- `index.html` points its Open Graph and Twitter meta tags at a **test host**.
-- The footer hardcodes a version string; the real one comes from the chart.
+- **Launch requests retry only on 502, 503, 504 and timeouts**, in `launchWithRetry`.
+  The gateway cuts requests off after 60s (`gateway.serviceRouteRequestTimeout`)
+  while a slow session keeps starting, so a later request picks it up.
+- The image runs nginx without root on **port 8080**, with a read-only filesystem
+  in the chart. Only `/tmp` is writable.
+- The footer version comes from the chart, which defaults it to the landing
+  page image tag. Without one the footer shows no version.
 - The legal pages are hardcoded TUM/GDPR content, partly German. Content, not
   code, and legally sensitive.
 
@@ -141,5 +164,4 @@ config.
 - Explicit return types on non-expression functions; it is a warning, and
   warnings are fatal.
 - Release tags are `vX.Y.Z`; the image tag is the same string without the `v`.
-- `eslint-plugin-header` is installed but no header rule is configured. There
-  are no license banners; do not add them expecting the linter to want them.
+- There are no license banners; do not add them.

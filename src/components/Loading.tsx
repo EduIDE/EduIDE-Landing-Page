@@ -1,7 +1,6 @@
 import { Spinner } from './Spinner';
 
 interface LoadingProps {
-    logoFileExtension: string;
     text?: string;
 }
 export const Loading: React.FC<LoadingProps> = ({ text }: LoadingProps): React.JSX.Element => {
