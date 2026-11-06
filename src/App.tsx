@@ -23,6 +23,8 @@ import { SessionEnded } from './components/SessionEnded';
 import type { LastLaunch, LaunchInputs } from './lastLaunch';
 import { clearLastLaunch, readLastLaunch, saveLastLaunch } from './lastLaunch';
 import { createAnonymousUser, createLaunchEnv, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
+import type { SessionEndReason } from './sessionEndReason';
+import { findSessionEndReason } from './sessionEndReason';
 
 // global state to be kept between render calls
 let initialized = false;
@@ -412,6 +414,29 @@ function App(): React.JSX.Element {
         }
     };
 
+    // Only Keycloak users can list their workspaces, and only a stored launch says which one ended.
+    const [sessionEndReason, setSessionEndReason] = useState<SessionEndReason>();
+    useEffect(() => {
+        const launch = currentPage === 'sessionEnded' ? readLastLaunch() : undefined;
+        if (!config?.useKeycloak || !username || !keycloakClient || !launch || launch.ephemeral) {
+            return;
+        }
+        const workspace = createWorkspaceName(launch.appDefinition, launch.buildSystemId, username, launch.gitUri);
+        const client = keycloakClient;
+        client
+            .updateToken(30)
+            .then(() =>
+                TheiaCloud.Workspace.listWorkspaces(
+                    { serviceUrl: config.serviceUrl, appId: getServiceAuthToken(config), user: email ?? username },
+                    { accessToken: client.idToken }
+                )
+            )
+            .then(workspaces => setSessionEndReason(findSessionEndReason(workspaces, workspace, launch.savedAt)))
+            .catch(() => {
+                // The general explanation stays.
+            });
+    }, [config, currentPage, username, email]);
+
     const handleConfirmIdentity = (confirmedUser: string): void => {
         setUser(confirmedUser);
         setIdentityConfirmed(true);
@@ -555,7 +580,12 @@ function App(): React.JSX.Element {
                                 {needsLogin ? (
                                     <LoginButton login={authenticate} />
                                 ) : isSessionEnded ? (
-                                    <SessionEnded lastLaunch={lastLaunch} onResume={resume} onStartNew={startNew} />
+                                    <SessionEnded
+                                        lastLaunch={lastLaunch}
+                                        reason={sessionEndReason}
+                                        onResume={resume}
+                                        onStartNew={startNew}
+                                    />
                                 ) : needsIdentityConfirmation ? (
                                     <ConfirmIdentity suggestedUser={suggestedUser ?? ''} onConfirm={handleConfirmIdentity} />
                                 ) : autoStart ? (
