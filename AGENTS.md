@@ -148,7 +148,8 @@ config.
   while a slow session keeps starting, so a later request picks it up.
 - The image runs nginx without root on **port 8080**, with a read-only filesystem
   in the chart. Only `/tmp` is writable.
-- The footer hardcodes a version string; the real one comes from the chart.
+- The footer version comes from the chart, which defaults it to the landing
+  page image tag. Without one the footer shows no version.
 - The legal pages are hardcoded TUM/GDPR content, partly German. Content, not
   code, and legally sensitive.
 

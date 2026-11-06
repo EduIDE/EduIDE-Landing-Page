@@ -158,7 +158,7 @@ describe('ErrorComponent', () => {
 });
 
 describe('Footer', () => {
-    it('falls back to the default links and version', () => {
+    it('falls back to the default links and shows no made-up version', () => {
         render(<Footer selectedAppDefinition='' />);
         expect(screen.getByRole('link', { name: /Built by TUM AET Team/ }).getAttribute('href')).toBe('https://aet.cit.tum.de/');
         expect(screen.getByRole('link', { name: /Report a bug/ }).getAttribute('href')).toBe(
@@ -166,7 +166,7 @@ describe('Footer', () => {
         );
         screen.getByRole('link', { name: /Request a feature/ });
         screen.getByRole('link', { name: 'About' });
-        screen.getByText('v1.0.0');
+        expect(screen.queryByText('·')).toBeNull();
     });
 
     it('uses the configured links and version', () => {

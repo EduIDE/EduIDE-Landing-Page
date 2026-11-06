@@ -45,8 +45,12 @@ export const Footer = ({ selectedAppDefinition, onNavigate, footerLinks }: Foote
                     <a href={footerLinks?.attribution?.url || 'https://aet.cit.tum.de/'} target='_blank' rel='noreferrer'>
                         {footerLinks?.attribution?.text || 'Built by TUM AET Team 👨‍💻'}
                     </a>
-                    <span className='App__footer__separator'> · </span>
-                    <span>{footerLinks?.attribution?.version || 'v1.0.0'}</span>
+                    {footerLinks?.attribution?.version && (
+                        <>
+                            <span className='App__footer__separator'> · </span>
+                            <span>{footerLinks.attribution.version}</span>
+                        </>
+                    )}
                 </div>
 
                 <div className='App__footer__issues'>
