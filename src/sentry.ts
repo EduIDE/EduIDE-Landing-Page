@@ -36,7 +36,8 @@ export function initializeSentry(): void {
         environment: config.sentryEnvironment,
         integrations: [Sentry.browserTracingIntegration()],
         tracePropagationTargets,
-        sendDefaultPii: false,
+        // Sentry 11 replaced sendDefaultPii, and collects all of these unless told not to.
+        dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false },
         tracesSampleRate,
         beforeSend: scrubEvent,
         // `TransactionEvent` is not re-exported by @sentry/react, so the handler
