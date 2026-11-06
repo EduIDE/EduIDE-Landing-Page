@@ -67,5 +67,13 @@
     "typescript": "^6.0.3",
     "vite": "^8.3.6",
     "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "@eclipse-theiacloud/common": {
+      "uuid": "^11.1.1"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
   }
 }
