@@ -27,14 +27,18 @@ export function initializeSentry(): void {
     const tracePropagationTargets = getTracePropagationTargets(config.serviceUrl);
     const configuredSampleRate = config.sentryTracesSampleRate;
     const tracesSampleRate =
-        typeof configuredSampleRate === 'number' && Number.isFinite(configuredSampleRate) && configuredSampleRate >= 0 && configuredSampleRate <= 1
+        typeof configuredSampleRate === 'number' &&
+        Number.isFinite(configuredSampleRate) &&
+        configuredSampleRate >= 0 &&
+        configuredSampleRate <= 1
             ? configuredSampleRate
             : DEFAULT_TRACES_SAMPLE_RATE;
 
     Sentry.init({
         dsn,
         environment: config.sentryEnvironment,
-        integrations: [Sentry.browserTracingIntegration()],
+        // Console messages can hold usernames, so they stay out of breadcrumbs.
+        integrations: defaults => [...defaults.filter(integration => integration.name !== 'Console'), Sentry.browserTracingIntegration()],
         tracePropagationTargets,
         // Sentry 11 replaced sendDefaultPii, and collects all of these unless told not to.
         dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false },

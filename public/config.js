@@ -69,7 +69,7 @@ window.theiaCloudConfig = {
     attribution: {
       text: 'Built by TUM AET Team 👨‍💻',
       url: 'https://aet.cit.tum.de/',
-      version: 'v1.0.0'
+      version: 'dev'
     },
     bugReport: {
       text: 'Report a bug',

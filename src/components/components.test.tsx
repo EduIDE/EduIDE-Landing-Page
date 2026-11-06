@@ -52,9 +52,7 @@ describe('SelectApp', () => {
         ['ignores a blank image', { appName: 'Java', image: '   ' }, '/assets/logos/java-logo.png'],
         ['resolves a plain name', { appName: 'Java', image: 'Open JDK' }, '/assets/logos/open-jdk-logo.png'],
         ['keeps a filename', { appName: 'Java', image: 'jdk.SVG' }, '/assets/logos/jdk.SVG'],
-        ['keeps an absolute path', { appName: 'Java', image: '/custom/logo.png' }, '/custom/logo.png'],
-        ['accepts the capitalised Image', { appName: 'Java', Image: 'jdk' }, '/assets/logos/jdk-logo.png'],
-        ['prefers image over Image', { appName: 'Java', image: 'one', Image: 'two' }, '/assets/logos/one-logo.png']
+        ['keeps an absolute path', { appName: 'Java', image: '/custom/logo.png' }, '/custom/logo.png']
     ])('logo %s', (_, app, expected) => {
         render(<SelectApp appDefinitions={[{ appId: 'id', ...app }]} onSelectApp={vi.fn()} />);
         expect(screen.getByRole('img').getAttribute('src')).toBe(expected);
@@ -160,7 +158,7 @@ describe('ErrorComponent', () => {
 });
 
 describe('Footer', () => {
-    it('falls back to the default links and version', () => {
+    it('falls back to the default links and shows no made-up version', () => {
         render(<Footer selectedAppDefinition='' />);
         expect(screen.getByRole('link', { name: /Built by TUM AET Team/ }).getAttribute('href')).toBe('https://aet.cit.tum.de/');
         expect(screen.getByRole('link', { name: /Report a bug/ }).getAttribute('href')).toBe(
@@ -168,7 +166,7 @@ describe('Footer', () => {
         );
         screen.getByRole('link', { name: /Request a feature/ });
         screen.getByRole('link', { name: 'About' });
-        screen.getByText('v1.0.0');
+        expect(screen.queryByText('·')).toBeNull();
     });
 
     it('uses the configured links and version', () => {
@@ -271,10 +269,10 @@ describe('Info', () => {
 
 describe('Loading and Spinner', () => {
     it('shows the default or the configured text with a spinner', () => {
-        const { container, rerender } = render(<Loading logoFileExtension='svg' />);
+        const { container, rerender } = render(<Loading />);
         screen.getByText(/hang in tight/);
         expect(container.querySelector('.circular-spinner')).not.toBeNull();
-        rerender(<Loading logoFileExtension='svg' text='Please wait' />);
+        rerender(<Loading text='Please wait' />);
         screen.getByText('Please wait');
     });
 
@@ -296,7 +294,7 @@ describe('LoginButton', () => {
 describe('AppLogo', () => {
     it('uses the configured file extension', () => {
         const { container } = render(<AppLogo fileExtension='png' />);
-        expect(container.querySelector('img')?.getAttribute('src')).toBe('./images/logos/theia-logo.png');
+        expect(container.querySelector('img')?.getAttribute('src')).toBe('/images/logos/theia-logo.png');
     });
 });
 
@@ -325,6 +323,23 @@ describe('ThemeToggle', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Switch to light mode' }));
         expect(document.documentElement.getAttribute('data-theme')).toBe('light');
         expect(localStorage.getItem('theme')).toBe('light');
+    });
+
+    it('still works when the browser blocks storage', () => {
+        const blocked = (): never => {
+            throw new DOMException('blocked', 'SecurityError');
+        };
+        vi.stubGlobal('localStorage', { getItem: blocked, setItem: blocked, clear: () => undefined });
+        renderToggle();
+        fireEvent.click(screen.getByRole('button', { name: 'Switch to dark mode' }));
+        expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+        vi.unstubAllGlobals();
+    });
+
+    it('ignores a saved theme it does not know', () => {
+        localStorage.setItem('theme', 'neon');
+        renderToggle();
+        expect(document.documentElement.getAttribute('data-theme')).toBe('light');
     });
 
     it('follows the system preference without a saved choice', () => {

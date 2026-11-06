@@ -189,6 +189,16 @@ describe('scrubbing', () => {
         expect(sentItems('event')[0].request.headers?.Referer).toBeUndefined();
     });
 
+    it('keeps console messages out of breadcrumbs', async () => {
+        const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+        startOnSecretUrl();
+        console.log('Prepared workspace for CONSOLE-USERNAME');
+        Sentry.captureException(new Error('boom'));
+
+        expect(await sentEnvelopes()).not.toContain('CONSOLE-USERNAME');
+        log.mockRestore();
+    });
+
     it('scrubs breadcrumb URLs and URL attributes on errors', async () => {
         startOnSecretUrl();
         Sentry.addBreadcrumb({

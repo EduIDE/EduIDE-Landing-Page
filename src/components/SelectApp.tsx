@@ -12,7 +12,7 @@ function normalizeLogoName(value: string): string {
 }
 
 function getAppLogoSrc(app: ExtendedAppDefinition): string {
-    const configuredImage = app.image ?? app.Image;
+    const configuredImage = app.image;
 
     if (!configuredImage || configuredImage.trim().length === 0) {
         return `/assets/logos/${normalizeLogoName(app.appName)}-logo.png`;

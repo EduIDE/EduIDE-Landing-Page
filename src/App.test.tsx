@@ -7,6 +7,7 @@ const keycloak = vi.hoisted(() => ({
     constructed: [] as unknown[],
     init: vi.fn(),
     login: vi.fn(),
+    updateToken: vi.fn(),
     idToken: undefined as string | undefined,
     idTokenParsed: undefined as Record<string, string> | undefined
 }));
@@ -20,6 +21,7 @@ vi.mock('keycloak-js', () => ({
     default: class {
         init = keycloak.init;
         login = keycloak.login;
+        updateToken = keycloak.updateToken;
         idToken = keycloak.idToken;
         idTokenParsed = keycloak.idTokenParsed;
         createLogoutUrl = (): string => 'https://keycloak.example/logout';
@@ -48,6 +50,7 @@ const BASE_CONFIG = {
     appDefinition: 'default-app',
     useKeycloak: false,
     useEphemeralStorage: true,
+    trustedArtemisHosts: ['git.example'],
     additionalApps: [JAVA, C_MULTI, RUST_SINGLE, HIDDEN]
 };
 const KEYCLOAK_CONFIG = {
@@ -60,6 +63,7 @@ const KEYCLOAK_CONFIG = {
 
 const LOADING_TEXT = /hang in tight/;
 const GIT_URI = 'https://student:SECRET@git.example/org/my-repo.git';
+const TRUSTED_URL = 'https://git.example';
 
 // App.tsx keeps one-time init state at module level, so each test needs a fresh copy of it.
 async function mountApp(): Promise<void> {
@@ -132,6 +136,7 @@ beforeEach(() => {
     theia.launchAndRedirect.mockReset().mockResolvedValue(undefined);
     keycloak.constructed.length = 0;
     keycloak.init.mockReset().mockResolvedValue(false);
+    keycloak.updateToken.mockReset().mockResolvedValue(true);
     keycloak.idToken = undefined;
     keycloak.idTokenParsed = undefined;
     // VantaBackground polls for these CDN globals until they exist.
@@ -220,6 +225,19 @@ describe('page routing', () => {
         expect(window.location.pathname).toBe('/');
     });
 
+    it('opens /imprint/ with a trailing slash', async () => {
+        await renderApp('/imprint/');
+        screen.getByRole('heading', { level: 1, name: 'Imprint' });
+    });
+
+    it('keeps the exercise link in the URL while reading the legal pages', async () => {
+        const link = query({ gitUri: 'https://git.example/r.git' });
+        await renderApp(link);
+        fireEvent.click(screen.getByRole('button', { name: 'Privacy' }));
+        fireEvent.click(screen.getByRole('button', { name: '← Back' }));
+        expect(window.location.pathname + window.location.search).toBe(link);
+    });
+
     it('follows browser back and forward', async () => {
         await renderApp();
         window.history.pushState({}, '', '/imprint');
@@ -237,7 +255,7 @@ describe('URL parameters', () => {
                 gitUri: GIT_URI,
                 gitUser: 'ada',
                 gitMail: 'ada@example.org',
-                artemisUrl: 'https://artemis.example',
+                artemisUrl: TRUSTED_URL,
                 artemisToken: 'artemis-secret',
                 appDef: 'java-17'
             })
@@ -248,7 +266,7 @@ describe('URL parameters', () => {
             GIT_URI: GIT_URI,
             GIT_USER: 'ada',
             GIT_MAIL: 'ada@example.org',
-            ARTEMIS_URL: 'https://artemis.example',
+            ARTEMIS_URL: TRUSTED_URL,
             ARTEMIS_TOKEN: 'artemis-secret'
         });
     });
@@ -260,7 +278,7 @@ describe('URL parameters', () => {
     });
 
     it('auto-launches the selected appDef once when gitUri and artemisToken are both present', async () => {
-        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token' }));
+        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
         await launchCount(1);
         expect(launchRequest().appDefinition).toBe('java-17');
         screen.getByText('Launch your Online IDE');
@@ -268,13 +286,13 @@ describe('URL parameters', () => {
     });
 
     it('also reads the lower-case appdef', async () => {
-        await renderApp(query({ appdef: 'java-17', gitUri: GIT_URI, artemisToken: 'token' }));
+        await renderApp(query({ appdef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
         await launchCount(1);
         expect(launchRequest().appDefinition).toBe('java-17');
     });
 
     it('auto-launches the default app definition without appDef', async () => {
-        await renderApp(query({ gitUri: GIT_URI, artemisToken: 'token' }));
+        await renderApp(query({ gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
         await launchCount(1);
         expect(launchRequest().appDefinition).toBe('default-app');
     });
@@ -288,9 +306,22 @@ describe('URL parameters', () => {
         }
     );
 
+    it.each([
+        ['the repository host is not trusted', { gitUri: 'https://evil.example/r.git', artemisUrl: TRUSTED_URL }],
+        ['the Artemis host is not trusted', { gitUri: GIT_URI, artemisUrl: 'https://evil.example' }],
+        ['the link has no Artemis URL', { gitUri: GIT_URI }]
+    ])('waits for a click when %s', async (_, params) => {
+        await renderApp(query({ appDef: 'java-17', artemisToken: 'token', ...params }));
+        const launch = screen.getByRole('button', { name: /Launch Java 17/ });
+        screen.getByText(/This link opens a repository from/);
+        expect(theia.ping).not.toHaveBeenCalled();
+        fireEvent.click(launch);
+        await launchCount(1);
+    });
+
     it('offers launching again after a failed auto-launch', async () => {
         theia.launchAndRedirect.mockRejectedValueOnce(new Error('launch failed'));
-        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token' }));
+        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
         await launchCount(1);
         await screen.findByText('ERROR: launch failed');
         fireEvent.click(screen.getByRole('button', { name: /Launch Java 17/ }));
@@ -299,7 +330,7 @@ describe('URL parameters', () => {
     });
 
     it('launches an app hidden from the list through appDef', async () => {
-        await renderApp(query({ appDef: 'hidden-app', gitUri: GIT_URI, artemisToken: 'token' }));
+        await renderApp(query({ appDef: 'hidden-app', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
         await launchCount(1);
         expect(launchRequest().appDefinition).toBe('hidden-app');
     });
@@ -321,7 +352,7 @@ describe('URL parameters', () => {
         });
 
         it('accepts any appDef when no additional apps are configured', async () => {
-            await renderApp(query({ appDef: 'anything', gitUri: GIT_URI, artemisToken: 'token' }), {
+            await renderApp(query({ appDef: 'anything', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }), {
                 ...BASE_CONFIG,
                 additionalApps: []
             });
@@ -330,7 +361,7 @@ describe('URL parameters', () => {
         });
 
         // Bug: isDefaultSelectionValueValid (App.tsx) checks serviceAuthToken only, while everything else also takes appId.
-        it.fails('accepts an appDef for an app configured with appId', async () => {
+        it('accepts an appDef for an app configured with appId', async () => {
             await renderApp(query({ appDef: 'legacy' }), {
                 ...BASE_CONFIG,
                 additionalApps: [{ appId: 'legacy', appName: 'Legacy' }]
@@ -339,8 +370,8 @@ describe('URL parameters', () => {
         });
 
         // Bug: the auto-start effect (App.tsx) ignores the validation error, launches the default app and clears the error.
-        it.fails('does not auto-launch something else after rejecting appDef', async () => {
-            await renderApp(query({ appDef: 'unknown', gitUri: GIT_URI, artemisToken: 'token' }));
+        it('does not auto-launch something else after rejecting appDef', async () => {
+            await renderApp(query({ appDef: 'unknown', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
             await waitFor(() => expect(screen.queryByText(LOADING_TEXT)).toBeNull());
             expect(theia.launchAndRedirect).not.toHaveBeenCalled();
         });
@@ -350,7 +381,7 @@ describe('URL parameters', () => {
 describe('authentication', () => {
     describe('with Keycloak', () => {
         it('checks the session silently, keeping the query string in the redirect URI', async () => {
-            const url = query({ gitUri: GIT_URI, artemisToken: 'token' });
+            const url = query({ gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL });
             await renderApp(url, KEYCLOAK_CONFIG);
             expect(keycloak.constructed).toEqual([{ url: 'https://keycloak.example/auth', realm: 'realm', clientId: 'client' }]);
             expect(keycloak.init).toHaveBeenCalledTimes(1);
@@ -363,7 +394,7 @@ describe('authentication', () => {
         });
 
         it('asks anonymous visitors to log in and does not auto-launch', async () => {
-            await renderApp(query({ gitUri: GIT_URI, artemisToken: 'token' }), KEYCLOAK_CONFIG);
+            await renderApp(query({ gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }), KEYCLOAK_CONFIG);
             screen.getByText('Login to use EduIDE');
             screen.getByTestId('loginButton');
             screen.getByText('Login & launch Session');
@@ -371,7 +402,7 @@ describe('authentication', () => {
         });
 
         it('logs in on demand and keeps the query string through the round trip', async () => {
-            const url = query({ gitUri: GIT_URI, artemisToken: 'token' });
+            const url = query({ gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL });
             await renderApp(url, KEYCLOAK_CONFIG);
             await act(async () => {
                 fireEvent.click(screen.getByTestId('loginButton'));
@@ -422,7 +453,7 @@ describe('authentication', () => {
             screen.getByText('ada@example.org');
             await selectApp('java-17');
             expect(launchRequest().user).toBe('ada@example.org');
-            expect(theia.launchAndRedirect.mock.calls[0][1]).toEqual({ timeout: 60000, retries: 5, accessToken: 'id-token' });
+            expect(theia.launchAndRedirect.mock.calls[0][1]).toEqual({ timeout: 60000, retries: 0, accessToken: 'id-token' });
         });
 
         it('names the workspace after the username, falling back to the email', async () => {
@@ -437,6 +468,21 @@ describe('authentication', () => {
             expect(launchRequest().workspaceName).toMatch(/^ws-rust-cargo-playground-ada-example-+[0-9a-f]+$/);
         });
 
+        it('refreshes the token right before launching', async () => {
+            await renderAuthenticated();
+            await selectApp('java-17');
+            expect(keycloak.updateToken).toHaveBeenCalledWith(30);
+        });
+
+        it('asks for a new login when the token cannot be refreshed', async () => {
+            await renderAuthenticated();
+            keycloak.updateToken.mockRejectedValue(new Error('session gone'));
+            await selectApp('java-17').catch(() => undefined);
+            await screen.findByText(/Your login has expired/);
+            screen.getByTestId('loginButton');
+            expect(theia.launchAndRedirect).not.toHaveBeenCalled();
+        });
+
         it('ignores ?user= because the identity comes from the token', async () => {
             await renderAuthenticated(query({ user: 'victim' }));
             expect(screen.queryByText('Confirm your identity')).toBeNull();
@@ -448,13 +494,13 @@ describe('authentication', () => {
             keycloak.idToken = 'id-token';
             keycloak.idTokenParsed = { email: 'ada@example.org', preferred_username: 'ada' };
             keycloak.init.mockResolvedValue(true);
-            await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token' }), KEYCLOAK_CONFIG);
+            await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }), KEYCLOAK_CONFIG);
             await launchCount(1);
             expect(launchRequest().user).toBe('ada@example.org');
         });
 
         // Bug: launchUser is `email!` (App.tsx), so without an email claim LaunchRequest invents a random user for every launch.
-        it.fails('launches as the username when the token has no email', async () => {
+        it('launches as the username when the token has no email', async () => {
             await renderAuthenticated('/', { preferred_username: 'ada' });
             await selectApp('java-17');
             expect(launchRequest().user).toBe('ada');
@@ -485,7 +531,7 @@ describe('authentication', () => {
         });
 
         it('does not auto-launch until ?user= is confirmed', async () => {
-            await renderApp(query({ user: 'victim', gitUri: GIT_URI, artemisToken: 'token' }));
+            await renderApp(query({ user: 'victim', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
             expect(theia.ping).not.toHaveBeenCalled();
             fireEvent.click(screen.getByRole('button', { name: 'Continue as this user' }));
             await launchCount(1);
@@ -547,7 +593,7 @@ describe('workspace naming', () => {
 
     // Bug: the repository workspace hash (App.tsx) covers only gitUri and the build system, unlike the playground one.
     // Two users sharing a 12 character prefix therefore get the same workspace for the same repository.
-    it.fails('tells apart users whose names only differ after the truncation for a repository', async () => {
+    it('tells apart users whose names only differ after the truncation for a repository', async () => {
         expect(await workspaceFor(url('alexandra-miller', GIT_URI), PERSISTENT)).not.toBe(
             await workspaceFor(url('alexandra-milner', GIT_URI), PERSISTENT)
         );
