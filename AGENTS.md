@@ -38,8 +38,8 @@ has module-level state, so `App.test.tsx` re-imports it for every test. An
 `it.fails` marks a known bug: fixing the bug makes that test fail, so turn it into
 a plain `it`.
 
-**CI runs `npm run lint` and `npm test`.** The Docker build's `npm run build`
-covers type errors. `format:check` never runs, so run it yourself.
+**CI runs `npm run lint`, `npm run typecheck` and `npm test`.** `format:check`
+never runs, so run it yourself.
 
 ## How configuration reaches the app
 
