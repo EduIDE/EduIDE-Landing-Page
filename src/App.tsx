@@ -19,6 +19,9 @@ import { LoginButton } from './components/LoginButton';
 import { Privacy } from './components/Privacy';
 import { SelectApp } from './components/SelectApp';
 import { SelectBuildSystem } from './components/SelectBuildSystem';
+import { SessionEnded } from './components/SessionEnded';
+import type { LastLaunch, LaunchInputs } from './lastLaunch';
+import { clearLastLaunch, readLastLaunch, saveLastLaunch } from './lastLaunch';
 import { createAnonymousUser, createLaunchEnv, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
 
 // global state to be kept between render calls
@@ -35,27 +38,29 @@ function getCurrentRedirectUri(): string {
     return window.location.href;
 }
 
+type Page = 'home' | 'imprint' | 'privacy' | 'sessionEnded';
+
+function pageFromPath(pathname: string): Page {
+    const path = pathname.replace(/\/+$/, '');
+    if (path === '/imprint') {
+        return 'imprint';
+    }
+    if (path === '/privacy') {
+        return 'privacy';
+    }
+    return path === '/session-ended' ? 'sessionEnded' : 'home';
+}
+
 function App(): React.JSX.Element {
     const [config] = useState<ExtendedTheiaCloudConfig | undefined>(() => getTheiaCloudConfig());
     const [error, setError] = useState<string>();
     const [loading, setLoading] = useState(false);
-    const [currentPage, setCurrentPage] = useState<'home' | 'imprint' | 'privacy'>('home');
+    // Read synchronously, so the auto-start effect already knows on its first run that this is /session-ended.
+    const [currentPage, setCurrentPage] = useState<Page>(() => pageFromPath(window.location.pathname));
 
     // Handle URL routing
     useEffect(() => {
-        const updatePageFromUrl = (): void => {
-            const path = window.location.pathname.replace(/\/+$/, '');
-            if (path === '/imprint') {
-                setCurrentPage('imprint');
-            } else if (path === '/privacy') {
-                setCurrentPage('privacy');
-            } else {
-                setCurrentPage('home');
-            }
-        };
-
-        // Initial load
-        updatePageFromUrl();
+        const updatePageFromUrl = (): void => setCurrentPage(pageFromPath(window.location.pathname));
 
         // Listen for browser back/forward navigation
         window.addEventListener('popstate', updatePageFromUrl);
@@ -246,7 +251,10 @@ function App(): React.JSX.Element {
     };
 
     const handleStartSession = useCallback(
-        (appDefinition: string, buildSystemId?: string): void => {
+        // Resume passes the stored inputs as `replay`. Setting them as state first would not reach
+        // this callback before it runs, and the workspace name would come out different.
+        (appDefinition: string, buildSystemId?: string, replay?: LaunchInputs): void => {
+            const inputs: LaunchInputs = replay ?? { gitUri, gitUser, gitMail, artemisUrl, artemisToken, anonymousUser: user };
             setLoading(true);
             setError(undefined);
 
@@ -254,8 +262,8 @@ function App(): React.JSX.Element {
                 TheiaCloud.ping(PingRequest.create(config.serviceUrl, getServiceAuthToken(config)))
                     .then(() => {
                         // ping successful continue with launch
-                        const workspaceUser = config.useKeycloak ? username : user;
-                        const workspace = createWorkspaceName(appDefinition, buildSystemId, workspaceUser, gitUri);
+                        const workspaceUser = config.useKeycloak ? username : inputs.anonymousUser;
+                        const workspace = createWorkspaceName(appDefinition, buildSystemId, workspaceUser, inputs.gitUri);
 
                         const requestOptions: RequestOptions = {
                             timeout: LAUNCH_REQUEST_TIMEOUT,
@@ -263,10 +271,10 @@ function App(): React.JSX.Element {
                             accessToken
                         };
 
-                        const envFromMap = createLaunchEnv({ artemisToken, artemisUrl, gitUri, gitUser, gitMail, buildSystemId });
+                        const envFromMap = createLaunchEnv({ ...inputs, buildSystemId });
 
                         const launchEnv = { fromMap: envFromMap };
-                        const launchUser = config.useKeycloak ? (email ?? username)! : user!;
+                        const launchUser = config.useKeycloak ? (email ?? username)! : inputs.anonymousUser!;
                         const serviceAuthToken = getServiceAuthToken(config);
                         const createWorkspaceLaunchRequest = (): LaunchRequest => ({
                             ...LaunchRequest.createWorkspace(
@@ -307,31 +315,42 @@ function App(): React.JSX.Element {
                         // Template launches always use workspace-backed sessions so that env vars
                         // are set directly on the container (eager/ephemeral sessions inject env
                         // vars via data bridge which arrives after the entrypoint has already run).
-                        const launchPromise =
-                            config.useEphemeralStorage && !buildSystemId
-                                ? (() => {
-                                      console.log(`Attempting ephemeral launch for ${appDefinition}`);
-                                      return launchWithRetry(() =>
-                                          TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions)
-                                      ).catch((err: Error) => {
-                                          if (!isWorkspaceRequiredFallbackError(err)) {
-                                              throw err;
-                                          }
+                        const tryEphemeral = config.useEphemeralStorage && !buildSystemId;
+                        const rememberLaunch = (ephemeral: boolean): void =>
+                            saveLastLaunch({
+                                ...inputs,
+                                anonymousUser: config.useKeycloak ? undefined : inputs.anonymousUser,
+                                appDefinition,
+                                buildSystemId,
+                                ephemeral
+                            });
+                        rememberLaunch(tryEphemeral);
 
-                                          console.log(
-                                              `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
-                                          );
-                                          return launchWithRetry(() =>
-                                              TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
-                                          );
-                                      });
-                                  })()
-                                : (() => {
-                                      console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
+                        const launchPromise = tryEphemeral
+                            ? (() => {
+                                  console.log(`Attempting ephemeral launch for ${appDefinition}`);
+                                  return launchWithRetry(() =>
+                                      TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions)
+                                  ).catch((err: Error) => {
+                                      if (!isWorkspaceRequiredFallbackError(err)) {
+                                          throw err;
+                                      }
+
+                                      console.log(
+                                          `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
+                                      );
+                                      rememberLaunch(false);
                                       return launchWithRetry(() =>
                                           TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
                                       );
-                                  })();
+                                  });
+                              })()
+                            : (() => {
+                                  console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
+                                  return launchWithRetry(() =>
+                                      TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
+                                  );
+                              })();
 
                         launchPromise
                             .catch((err: Error) => {
@@ -340,6 +359,11 @@ function App(): React.JSX.Element {
                                         `The app definition '${appDefinition}' is not available in the cluster.\n` +
                                             'Please try launching another application.'
                                     );
+                                    return;
+                                }
+                                if (err && (err as any).status === 553) {
+                                    // The ended session can still be shutting down and count against the per-user limit.
+                                    setError('Your previous session is still shutting down.\nPlease try again in a few seconds.');
                                     return;
                                 }
                                 setError(err.message);
@@ -403,6 +427,12 @@ function App(): React.JSX.Element {
             return;
         }
 
+        // Resuming an ended session always takes a click.
+        if (currentPage === 'sessionEnded') {
+            autoStartRequestedRef.current = false;
+            return;
+        }
+
         // Do not auto-launch in anonymous mode until the identity is confirmed.
         if (!config.useKeycloak && !identityConfirmed) {
             autoStartRequestedRef.current = false;
@@ -431,7 +461,8 @@ function App(): React.JSX.Element {
         handleStartSession,
         config.useKeycloak,
         config.trustedArtemisHosts,
-        identityConfirmed
+        identityConfirmed,
+        currentPage
     ]);
 
     /* eslint-enable react-hooks/rules-of-hooks */
@@ -481,6 +512,14 @@ function App(): React.JSX.Element {
         );
     }
 
+    const isSessionEnded = currentPage === 'sessionEnded';
+    const lastLaunch = isSessionEnded ? readLastLaunch() : undefined;
+    const resume = (launch: LastLaunch): void => handleStartSession(launch.appDefinition, launch.buildSystemId, launch);
+    const startNew = (): void => {
+        clearLastLaunch();
+        handleNavigation('home');
+    };
+
     const standaloneAppBuildSystems =
         config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === standaloneAppDef)?.buildSystems ?? [];
 
@@ -500,19 +539,23 @@ function App(): React.JSX.Element {
                             <div style={{ marginTop: '2rem' }}></div>
                             <AppLogo fileExtension={logoFileExtension} />
                             <h2 className='App__title'>
-                                {needsLogin
-                                    ? 'Login to use EduIDE'
-                                    : needsIdentityConfirmation
-                                      ? 'Confirm your identity'
-                                      : autoStart
-                                        ? 'Launch your Online IDE'
-                                        : standaloneWizardStep === 'buildSystem'
-                                          ? 'Choose your build system'
-                                          : 'Choose your programming language'}
+                                {isSessionEnded
+                                    ? 'Your session has ended'
+                                    : needsLogin
+                                      ? 'Login to use EduIDE'
+                                      : needsIdentityConfirmation
+                                        ? 'Confirm your identity'
+                                        : autoStart
+                                          ? 'Launch your Online IDE'
+                                          : standaloneWizardStep === 'buildSystem'
+                                            ? 'Choose your build system'
+                                            : 'Choose your programming language'}
                             </h2>
                             <div>
                                 {needsLogin ? (
                                     <LoginButton login={authenticate} />
+                                ) : isSessionEnded ? (
+                                    <SessionEnded lastLaunch={lastLaunch} onResume={resume} onStartNew={startNew} />
                                 ) : needsIdentityConfirmation ? (
                                     <ConfirmIdentity suggestedUser={suggestedUser ?? ''} onConfirm={handleConfirmIdentity} />
                                 ) : autoStart ? (
