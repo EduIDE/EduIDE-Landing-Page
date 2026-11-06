@@ -3,7 +3,6 @@ import * as Sentry from '@sentry/react';
 
 import type { ExtendedTheiaCloudConfig } from './common-extensions/types';
 
-const DEFAULT_SENTRY_DSN = 'https://a3851baf2ece0c6bec13e1c99fd3111f@sentry.aet.cit.tum.de/13';
 const DEFAULT_TRACES_SAMPLE_RATE = 0.2;
 
 // Query parameters that may carry secrets (credentials, tokens) and must never
@@ -15,11 +14,16 @@ const REDACTED = '[Filtered]';
 export function initializeSentry(): void {
     const config = getTheiaCloudConfig() as ExtendedTheiaCloudConfig | undefined;
 
-    if (!config?.sentryEnable) {
+    if (config?.sentryEnable !== true) {
         return;
     }
 
-    const dsn = config.sentryDsn?.trim() || DEFAULT_SENTRY_DSN;
+    const dsn = config.sentryDsn?.trim();
+    if (!dsn) {
+        console.warn('Sentry stays disabled: sentryEnable is set, but sentryDsn is missing.');
+        return;
+    }
+
     const tracePropagationTargets = getTracePropagationTargets(config.serviceUrl);
     const configuredSampleRate = config.sentryTracesSampleRate;
     const tracesSampleRate =
@@ -41,8 +45,9 @@ export function initializeSentry(): void {
     });
 }
 
-// Remove embedded credentials and redact sensitive query parameters from a URL
-// string. Returns the input unchanged if it cannot be parsed as a URL.
+// Remove embedded credentials and the fragment, and redact sensitive query
+// parameters from a URL string. Keycloak returns its authorization code in the
+// fragment, and Sentry starts before Keycloak has processed that callback. Returns the input unchanged if it cannot be parsed as a URL.
 function scrubUrl(value: string): string {
     try {
         const url = new URL(value, window.location.origin);
@@ -50,6 +55,7 @@ function scrubUrl(value: string): string {
             url.username = '';
             url.password = '';
         }
+        url.hash = '';
         for (const key of SENSITIVE_QUERY_PARAMS) {
             if (url.searchParams.has(key)) {
                 url.searchParams.set(key, REDACTED);
@@ -94,6 +100,7 @@ function scrubUrlAttributes(data: Record<string, unknown>): void {
             data[key] = scrubUrl(data[key] as string);
         }
     }
+    delete data['http.fragment'];
 }
 
 function scrubTransaction(event: Sentry.Event): Sentry.Event {
@@ -105,10 +112,10 @@ function scrubTransaction(event: Sentry.Event): Sentry.Event {
         scrubUrlAttributes(traceData);
     }
 
-    // Transaction names from browser tracing are URLs; drop any query string so
-    // a secret-bearing parameter never becomes the transaction identity.
+    // Transaction names from browser tracing are URLs; drop any query string and
+    // fragment so a secret never becomes the transaction identity.
     if (typeof event.transaction === 'string') {
-        event.transaction = event.transaction.split('?')[0];
+        event.transaction = event.transaction.split(/[?#]/)[0];
     }
 
     if (event.spans) {
@@ -120,7 +127,7 @@ function scrubTransaction(event: Sentry.Event): Sentry.Event {
                     data['http.query'] = scrubQuery(data['http.query'] as string);
                 }
             }
-            if (typeof span.description === 'string' && span.description.includes('?')) {
+            if (typeof span.description === 'string' && /[?#]/.test(span.description)) {
                 span.description = scrubUrl(span.description);
             }
         }
