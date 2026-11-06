@@ -39,6 +39,9 @@ export function initializeSentry(): void {
         // Sentry 11 replaced sendDefaultPii, and collects all of these unless told not to.
         dataCollection: { userInfo: false, cookies: false, httpHeaders: false, httpBodies: [], urlQueryParams: false },
         tracesSampleRate,
+        // Sentry 11 streams spans by default, and a streamed span never reaches
+        // beforeSendTransaction, so the page URL would go out unscrubbed.
+        traceLifecycle: 'static',
         beforeSend: scrubEvent,
         // `TransactionEvent` is not re-exported by @sentry/react, so the handler
         // works on the `Event` supertype and is cast back for the option slot.
@@ -85,11 +88,12 @@ function scrubEvent<T extends Sentry.Event>(event: T): T {
             if (!data) {
                 continue;
             }
-            for (const key of ['url', 'to', 'from']) {
+            for (const key of ['to', 'from']) {
                 if (typeof data[key] === 'string') {
                     data[key] = scrubUrl(data[key] as string);
                 }
             }
+            scrubUrlAttributes(data);
         }
     }
     return event;
@@ -101,7 +105,14 @@ function scrubUrlAttributes(data: Record<string, unknown>): void {
             data[key] = scrubUrl(data[key] as string);
         }
     }
+    // Sentry 11 reports these as url.*, older versions as http.*.
     delete data['http.fragment'];
+    delete data['url.fragment'];
+    for (const key of ['http.query', 'url.query']) {
+        if (typeof data[key] === 'string') {
+            data[key] = scrubQuery(data[key] as string);
+        }
+    }
 }
 
 function scrubTransaction(event: Sentry.Event): Sentry.Event {
@@ -124,12 +135,10 @@ function scrubTransaction(event: Sentry.Event): Sentry.Event {
             const data = span.data as Record<string, unknown> | undefined;
             if (data) {
                 scrubUrlAttributes(data);
-                if (typeof data['http.query'] === 'string') {
-                    data['http.query'] = scrubQuery(data['http.query'] as string);
-                }
             }
-            if (typeof span.description === 'string' && /[?#]/.test(span.description)) {
-                span.description = scrubUrl(span.description);
+            // Descriptions look like `GET https://host/path?query`, so scrub only the URL part.
+            if (typeof span.description === 'string') {
+                span.description = span.description.replace(/\S*[?#@]\S*/g, scrubUrl);
             }
         }
     }

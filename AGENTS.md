@@ -23,17 +23,22 @@ naming, launch and fallback all live there.
 
 ```bash
 npm run dev          # http://localhost:5173
+npm test             # vitest run
 npm run build        # tsc && vite build
 npm run typecheck
 npm run lint         # --max-warnings 0, so warnings are fatal
 npm run format
 ```
 
-There are no tests, no test runner and no test dependency.
+Tests sit next to the code in `src/` and run on Vitest with jsdom and React
+Testing Library. They mock only what crosses the process boundary: `keycloak-js`,
+`TheiaCloud` from `@eclipse-theiacloud/common`, and the Sentry transport. `App.tsx`
+has module-level state, so `App.test.tsx` re-imports it for every test. An
+`it.fails` marks a known bug: fixing the bug makes that test fail, so turn it into
+a plain `it`.
 
-**Only the build runs in CI.** `npm run lint`, `typecheck` and `format:check`
-never run — the Docker build's `npm run build` is the sole gate, so type errors
-fail CI and lint and formatting violations do not. Run them yourself.
+**CI runs `npm run lint` and `npm test`.** The Docker build's `npm run build`
+covers type errors. `format:check` never runs, so run it yourself.
 
 ## How configuration reaches the app
 
@@ -71,6 +76,11 @@ This is the most likely source of "works in prod, broken locally".
 `src/sentry.ts` only starts Sentry when `sentryEnable` is `true` and `sentryDsn`
 is set. There is no built-in DSN. The chart emits both from
 `landingPage.sentry.enable` and `landingPage.sentry.dsn`.
+
+`traceLifecycle: 'static'` is load-bearing. Sentry 11 streams spans by default,
+and streamed spans skip `beforeSendTransaction`, which would send the Keycloak
+`#code=...` fragment unscrubbed. `src/sentry.test.ts` checks this against real
+envelopes.
 
 ## The app list is a contract with the chart
 

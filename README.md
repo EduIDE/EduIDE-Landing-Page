@@ -156,6 +156,7 @@ Example: `https://your-landing-page.com/?appDef=myapp&gitUri=https://github.com/
 | `npm run dev` | Start development server |
 | `npm run build` | Build for production |
 | `npm run preview` | Preview production build |
+| `npm test` | Run the test suite once (Vitest) |
 | `npm run typecheck` | Run TypeScript type checking |
 | `npm run lint` | Run ESLint linter |
 | `npm run lint:fix` | Auto-fix linting issues |
@@ -198,6 +199,7 @@ EduIDE-Landing-Page/
 │   ├── contexts/            # React contexts
 │   │   └── ThemeContext.tsx
 │   ├── App.tsx              # Main application component
+│   ├── App.test.tsx         # Tests sit next to the code they cover
 │   ├── App.css              # Application styles
 │   └── main.tsx             # Entry point
 ├── public/                  # Static assets
