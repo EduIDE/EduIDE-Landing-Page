@@ -10,14 +10,14 @@ window.theiaCloudConfig = {
   pageTitle: 'EduIDE Cloud',
   additionalApps: [
     {
-      appId: "c-latest",
+      appId: "c",
       appName: "C",
       buildSystems: [
         { id: "makefile", label: "Makefile"}
       ]
     },
     {
-      appId: "java-17-latest", 
+      appId: "java-17", 
       appName: "Java",
       image: "java-17",
       buildSystems: [
@@ -26,7 +26,7 @@ window.theiaCloudConfig = {
       ]
     },
     {
-      appId: "javascript-latest",
+      appId: "javascript",
       appName: "Javascript",
       buildSystems: [
         { id: "npm", label: "npm"}
@@ -40,7 +40,7 @@ window.theiaCloudConfig = {
       ]
     },
     {
-      appId: "python-latest",
+      appId: "python",
       appName: "Python",
       buildSystems: [
         { id: "pip", label: "pip"}
