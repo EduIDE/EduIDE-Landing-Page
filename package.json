@@ -64,6 +64,11 @@
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "prettier": "^3.9.6",
     "typescript": "^5.9.3",
-    "vite": "^8.2.2"
+    "vite": "^8.2.4"
+  },
+  "overrides": {
+    "@eclipse-theiacloud/common": {
+      "uuid": "^11.1.1"
+    }
   }
 }
