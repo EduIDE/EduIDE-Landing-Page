@@ -1,20 +1,28 @@
 import type { LastLaunch } from '../lastLaunch';
+import type { SessionEndReason } from '../sessionEndReason';
 
 interface SessionEndedProps {
     lastLaunch?: LastLaunch;
+    reason?: SessionEndReason;
     onResume: (lastLaunch: LastLaunch) => void;
     onStartNew: () => void;
 }
 
+const REASON_TEXT: Record<SessionEndReason, string> = {
+    inactivity: 'Your session closed after a period without activity.',
+    lifetime: 'Your session reached the maximum time a session may run and was closed.'
+};
+
 // The gateway redirects here when a request hits a session that no longer exists.
-export const SessionEnded = ({ lastLaunch, onResume, onStartNew }: SessionEndedProps): React.JSX.Element => {
+export const SessionEnded = ({ lastLaunch, reason, onResume, onStartNew }: SessionEndedProps): React.JSX.Element => {
     const canResume = lastLaunch !== undefined && !lastLaunch.ephemeral;
 
     return (
         <div className='App__session-ended'>
             <p>
-                Your session is no longer running. Sessions close after a period without activity, or when they reach the maximum time a
-                session may run.
+                {reason
+                    ? REASON_TEXT[reason]
+                    : 'Your session is no longer running. Sessions close after a period without activity, or when they reach the maximum time a session may run.'}
             </p>
             {lastLaunch === undefined ? (
                 <p>To continue, choose your environment again or follow the link from your exercise.</p>

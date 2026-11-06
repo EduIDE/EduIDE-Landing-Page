@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const theia = vi.hoisted(() => ({ ping: vi.fn(), launchAndRedirect: vi.fn() }));
+const theia = vi.hoisted(() => ({ ping: vi.fn(), launchAndRedirect: vi.fn(), Workspace: { listWorkspaces: vi.fn() } }));
 const keycloak = vi.hoisted(() => ({
     constructed: [] as unknown[],
     init: vi.fn(),
@@ -134,6 +134,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     theia.ping.mockReset().mockResolvedValue(true);
     theia.launchAndRedirect.mockReset().mockResolvedValue(undefined);
+    theia.Workspace.listWorkspaces.mockReset().mockResolvedValue([]);
     keycloak.constructed.length = 0;
     keycloak.init.mockReset().mockResolvedValue(false);
     keycloak.updateToken.mockReset().mockResolvedValue(true);
@@ -855,6 +856,50 @@ describe('session ended', () => {
         await renderApp('/session-ended', WORKSPACE_CONFIG);
         expect(screen.queryByRole('button', { name: 'Resume my session' })).toBeNull();
         vi.mocked(Date.now).mockRestore();
+    });
+
+    describe('with the reason from the workspace', () => {
+        const KEYCLOAK_WORKSPACE_CONFIG = { ...KEYCLOAK_CONFIG, useEphemeralStorage: false };
+        const GENERAL = /Sessions close after a period without activity/;
+
+        async function launchThenEndLoggedIn(respond: (workspaceName: string) => Promise<object[]>): Promise<void> {
+            keycloak.idToken = 'id-token';
+            keycloak.idTokenParsed = { email: 'ada@example.org', preferred_username: 'ada' };
+            keycloak.init.mockResolvedValue(true);
+            await renderApp('/', KEYCLOAK_WORKSPACE_CONFIG);
+            await screen.findByText('Choose your programming language');
+            await selectApp('java-17');
+            const workspaceName = launchRequest().workspaceName;
+            theia.Workspace.listWorkspaces.mockImplementation(() => respond(workspaceName));
+            cleanup();
+            await renderApp('/session-ended', KEYCLOAK_WORKSPACE_CONFIG);
+            await screen.findByText(ENDED);
+        }
+
+        it.each([
+            ['inactivity', /closed after a period without activity/],
+            ['lifetime', /reached the maximum time a session may run/]
+        ])('says the session ended for %s', async (reason, text) => {
+            const ended = new Date(Date.now() + 60_000).toISOString();
+            await launchThenEndLoggedIn(async name => [{ name, lastSessionEndReason: reason, lastSessionEndTime: ended }]);
+            await screen.findByText(text);
+            expect(theia.Workspace.listWorkspaces).toHaveBeenCalledWith(
+                expect.objectContaining({ serviceUrl: 'https://service.example', user: 'ada@example.org' }),
+                { accessToken: 'id-token' }
+            );
+        });
+
+        it('keeps the general text when the lookup fails', async () => {
+            await launchThenEndLoggedIn(() => Promise.reject(new Error('down')));
+            await waitFor(() => expect(theia.Workspace.listWorkspaces).toHaveBeenCalled());
+            screen.getByText(GENERAL);
+        });
+
+        it('does not ask without Keycloak', async () => {
+            await launchThenEnd();
+            screen.getByText(GENERAL);
+            expect(theia.Workspace.listWorkspaces).not.toHaveBeenCalled();
+        });
     });
 
     it('explains a previous session that is still shutting down', async () => {

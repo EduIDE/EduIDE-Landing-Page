@@ -11,6 +11,7 @@ React SPA served by nginx.
 src/App.tsx                    most of the application: config, URL parsing, Keycloak, launch
 src/launch.ts                  workspace naming, launch env, trusted hosts, launch retries
 src/lastLaunch.ts              what the last launch in this tab used, so /session-ended can resume it
+src/sessionEndReason.ts        picks why the stored launch ended from the workspace list
 src/common-extensions/types.ts the EduIDE-specific config surface
 src/components/                16 presentational components
 src/sentry.ts                  reads the config a second time, before React mounts
@@ -136,8 +137,13 @@ the same volume is mounted again.
   first does not reach the callback in time, and the workspace name comes out
   different: an empty workspace instead of the student's.
 - An ephemeral session has no volume, so the page offers only a fresh start.
-- The page does not know **why** the session ended: the gateway redirect carries
-  no reason.
+- The gateway redirect carries no reason, so the page asks EduIDE-Cloud. The
+  operator annotates the workspace when it stops a session, and the workspace
+  list returns `lastSessionEndReason` (`inactivity` or `lifetime`) and
+  `lastSessionEndTime`. `src/sessionEndReason.ts` uses a reason only for the
+  workspace the stored launch names and only if it is newer than that launch.
+  This needs Keycloak (the list refuses anonymous callers) and a persistent
+  workspace; otherwise, or if the call fails, the page keeps the general text.
 
 ## Auth
 
