@@ -19,7 +19,6 @@ import { LoginButton } from './components/LoginButton';
 import { Privacy } from './components/Privacy';
 import { SelectApp } from './components/SelectApp';
 import { SelectBuildSystem } from './components/SelectBuildSystem';
-import { VantaBackground } from './components/VantaBackground';
 
 // global state to be kept between render calls
 let initialized = false;
@@ -509,9 +508,7 @@ function App(): React.JSX.Element {
     if (currentPage === 'imprint') {
         return (
             <div className='App'>
-                <VantaBackground>
-                    <Imprint onNavigate={handleNavigation} />
-                </VantaBackground>
+                <Imprint onNavigate={handleNavigation} />
             </div>
         );
     }
@@ -519,9 +516,7 @@ function App(): React.JSX.Element {
     if (currentPage === 'privacy') {
         return (
             <div className='App'>
-                <VantaBackground>
-                    <Privacy onNavigate={handleNavigation} />
-                </VantaBackground>
+                <Privacy onNavigate={handleNavigation} />
             </div>
         );
     }
@@ -531,66 +526,64 @@ function App(): React.JSX.Element {
 
     return (
         <div className='App'>
-            <VantaBackground>
-                <Header
-                    email={config.useKeycloak ? email : undefined}
-                    authenticate={config.useKeycloak ? authenticate : undefined}
-                    logoutUrl={config.useKeycloak ? logoutUrl : undefined}
-                />
-                <div className='body'>
-                    {loading ? (
-                        <Loading logoFileExtension={logoFileExtension} text={config.loadingText} />
-                    ) : (
+            <Header
+                email={config.useKeycloak ? email : undefined}
+                authenticate={config.useKeycloak ? authenticate : undefined}
+                logoutUrl={config.useKeycloak ? logoutUrl : undefined}
+            />
+            <div className='body'>
+                {loading ? (
+                    <Loading logoFileExtension={logoFileExtension} text={config.loadingText} />
+                ) : (
+                    <div>
                         <div>
+                            <div style={{ marginTop: '2rem' }}></div>
+                            <AppLogo fileExtension={logoFileExtension} />
+                            <h2 className='App__title'>
+                                {needsLogin
+                                    ? 'Login to use EduIDE'
+                                    : needsIdentityConfirmation
+                                      ? 'Confirm your identity'
+                                      : autoStart
+                                        ? 'Launch your Online IDE'
+                                        : standaloneWizardStep === 'buildSystem'
+                                          ? 'Choose your build system'
+                                          : 'Choose your programming language'}
+                            </h2>
                             <div>
-                                <div style={{ marginTop: '2rem' }}></div>
-                                <AppLogo fileExtension={logoFileExtension} />
-                                <h2 className='App__title'>
-                                    {needsLogin
-                                        ? 'Login to use EduIDE'
-                                        : needsIdentityConfirmation
-                                          ? 'Confirm your identity'
-                                          : autoStart
-                                            ? 'Launch your Online IDE'
-                                            : standaloneWizardStep === 'buildSystem'
-                                              ? 'Choose your build system'
-                                              : 'Choose your programming language'}
-                                </h2>
-                                <div>
-                                    {needsLogin ? (
-                                        <LoginButton login={authenticate} />
-                                    ) : needsIdentityConfirmation ? (
-                                        <ConfirmIdentity suggestedUser={suggestedUser ?? ''} onConfirm={handleConfirmIdentity} />
-                                    ) : autoStart ? (
-                                        <LaunchApp
-                                            appName={selectedAppName}
-                                            appDefinition={selectedAppDefinition}
-                                            onStartSession={handleStartSession}
-                                        />
-                                    ) : standaloneWizardStep === 'buildSystem' ? (
-                                        <SelectBuildSystem
-                                            buildSystems={standaloneAppBuildSystems}
-                                            onSelect={buildSystemId => handleStartSession(standaloneAppDef!, buildSystemId)}
-                                            onBack={() => setStandaloneWizardStep('language')}
-                                        />
-                                    ) : (
-                                        <SelectApp appDefinitions={config.additionalApps} onSelectApp={handleAppSelected} />
-                                    )}
-                                </div>
+                                {needsLogin ? (
+                                    <LoginButton login={authenticate} />
+                                ) : needsIdentityConfirmation ? (
+                                    <ConfirmIdentity suggestedUser={suggestedUser ?? ''} onConfirm={handleConfirmIdentity} />
+                                ) : autoStart ? (
+                                    <LaunchApp
+                                        appName={selectedAppName}
+                                        appDefinition={selectedAppDefinition}
+                                        onStartSession={handleStartSession}
+                                    />
+                                ) : standaloneWizardStep === 'buildSystem' ? (
+                                    <SelectBuildSystem
+                                        buildSystems={standaloneAppBuildSystems}
+                                        onSelect={buildSystemId => handleStartSession(standaloneAppDef!, buildSystemId)}
+                                        onBack={() => setStandaloneWizardStep('language')}
+                                    />
+                                ) : (
+                                    <SelectApp appDefinitions={config.additionalApps} onSelectApp={handleAppSelected} />
+                                )}
                             </div>
                         </div>
-                    )}
-                    <ErrorComponent message={error} />
-                    {!error && !loading && (
-                        <Info usesLogin={config.useKeycloak} disable={config.disableInfo} text={config.infoText} title={config.infoTitle} />
-                    )}
-                </div>
-                <Footer
-                    selectedAppDefinition={autoStart ? selectedAppDefinition : ''}
-                    onNavigate={handleNavigation}
-                    footerLinks={config.footerLinks}
-                />
-            </VantaBackground>
+                    </div>
+                )}
+                <ErrorComponent message={error} />
+                {!error && !loading && (
+                    <Info usesLogin={config.useKeycloak} disable={config.disableInfo} text={config.infoText} title={config.infoTitle} />
+                )}
+            </div>
+            <Footer
+                selectedAppDefinition={autoStart ? selectedAppDefinition : ''}
+                onNavigate={handleNavigation}
+                footerLinks={config.footerLinks}
+            />
         </div>
     );
 }

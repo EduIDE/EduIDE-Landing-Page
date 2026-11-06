@@ -9,7 +9,6 @@ Landing page for EduIDE Cloud workspace management, providing a user-friendly in
 - **Dynamic Configuration**: Runtime configuration via `config.js`
 - **Query Parameters**: Support for various URL parameters (gitUri, gitToken, artemisToken, etc.)
 - **Responsive Design**: Modern UI with dark/light theme support
-- **3D Background**: Interactive Vanta.js animated background
 
 ## Prerequisites
 
@@ -195,8 +194,7 @@ EduIDE-Landing-Page/
 │   │   ├── Privacy.tsx
 │   │   ├── SelectApp.tsx
 │   │   ├── Spinner.tsx
-│   │   ├── ThemeToggle.tsx
-│   │   └── VantaBackground.tsx
+│   │   └── ThemeToggle.tsx
 │   ├── contexts/            # React contexts
 │   │   └── ThemeContext.tsx
 │   ├── App.tsx              # Main application component
