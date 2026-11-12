@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=26.0.0"
   },
   "repository": {
     "type": "git",
@@ -28,42 +28,52 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --ext ts,tsx --fix",
     "preview": "vite preview",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
     "@eclipse-theiacloud/common": "1.2.0",
-    "@sentry/react": "^10.71.0",
-    "keycloak-js": "26.2.4",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "three": "^0.185.1",
-    "vanta": "^0.5.24"
+    "@sentry/react": "^11.11.0",
+    "keycloak-js": "26.2.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
-    "@types/node": "^20.19.43",
-    "@types/react": "^19.2.0",
-    "@types/react-dom": "^19.2.0",
-    "@typescript-eslint/eslint-plugin": "^8.68.0",
-    "@typescript-eslint/parser": "^8.68.0",
-    "@vitejs/plugin-react": "^6.1.0",
-    "eslint": "^8.57.1",
+    "@eslint/js": "^9.39.5",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
+    "@vitejs/plugin-react": "^6.2.1",
+    "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.5",
-    "eslint-plugin-header": "^3.1.1",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-no-null": "^1.0.2",
-    "eslint-plugin-prettier": "^5.5.6",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.26",
-    "eslint-plugin-simple-import-sort": "^12.1.1",
-    "prettier": "^3.9.6",
-    "typescript": "^5.9.3",
-    "vite": "^8.2.2"
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.7",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
+    "jsdom": "^31.0.0",
+    "prettier": "^3.9.10",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "@eclipse-theiacloud/common": {
+      "uuid": "^11.1.1"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.1"
+    }
   }
 }

@@ -9,11 +9,10 @@ Landing page for EduIDE Cloud workspace management, providing a user-friendly in
 - **Dynamic Configuration**: Runtime configuration via `config.js`
 - **Query Parameters**: Support for various URL parameters (gitUri, gitToken, artemisToken, etc.)
 - **Responsive Design**: Modern UI with dark/light theme support
-- **3D Background**: Interactive Vanta.js animated background
 
 ## Prerequisites
 
-- **Node.js**: >= 20.19.0 (required by Vite 8)
+- **Node.js**: >= 26.0.0
 - **npm**: Latest stable version
 - **Docker** (for containerized deployment): Docker with Buildx support for multi-arch builds
 
@@ -54,7 +53,7 @@ The built files will be in the `dist/` directory.
 docker build -t ghcr.io/EduIDE/eduidec-landing-page:latest .
 
 # Run the container
-docker run -d -p 80:80 ghcr.io/EduIDE/eduidec-landing-page:latest
+docker run -d -p 80:8080 ghcr.io/EduIDE/eduidec-landing-page:latest
 ```
 
 ## Configuration
@@ -83,9 +82,9 @@ window.theiaCloudConfig = {
   loadingText: "Loading your workspace...",
   logoFileExtension: "png",
   pageTitle: "EduIDE Cloud",
+  // Sentry stays off unless sentryEnable is true and sentryDsn is set.
   sentryEnable: true,
   sentryEnvironment: "production",
-  // Optional override. If omitted, the default EduIDE Sentry DSN is used.
   sentryDsn: "https://examplePublicKey@sentry.example.com/123",
 
   // Additional apps to display
@@ -121,9 +120,10 @@ window.theiaCloudConfig = {
 | `infoText` | string | No | Info banner text |
 | `loadingText` | string | No | Loading message text |
 | `logoFileExtension` | string | No | Logo file extension (png, svg, etc.) |
-| `sentryEnable` | boolean | No | Enable Sentry browser monitoring |
+| `sentryEnable` | boolean | No | Enable Sentry browser monitoring. Defaults to off and also needs `sentryDsn` |
 | `sentryEnvironment` | string | No | Sentry environment tag, e.g. namespace or deployment name |
-| `sentryDsn` | string | No | Override the default EduIDE Sentry DSN |
+| `sentryDsn` | string | No | Sentry endpoint to report to. There is no built-in default |
+| `trustedArtemisHosts` | array | No | Hosts whose Artemis links start a session without a click. Both `gitUri` and `artemisUrl` must match. Default: none |
 | `additionalApps` | array | No | Additional apps to display |
 | `footerLinks` | object | No | Footer link configuration |
 
@@ -157,6 +157,7 @@ Example: `https://your-landing-page.com/?appDef=myapp&gitUri=https://github.com/
 | `npm run dev` | Start development server |
 | `npm run build` | Build for production |
 | `npm run preview` | Preview production build |
+| `npm test` | Run the test suite once (Vitest) |
 | `npm run typecheck` | Run TypeScript type checking |
 | `npm run lint` | Run ESLint linter |
 | `npm run lint:fix` | Auto-fix linting issues |
@@ -195,11 +196,11 @@ EduIDE-Landing-Page/
 │   │   ├── Privacy.tsx
 │   │   ├── SelectApp.tsx
 │   │   ├── Spinner.tsx
-│   │   ├── ThemeToggle.tsx
-│   │   └── VantaBackground.tsx
+│   │   └── ThemeToggle.tsx
 │   ├── contexts/            # React contexts
 │   │   └── ThemeContext.tsx
 │   ├── App.tsx              # Main application component
+│   ├── App.test.tsx         # Tests sit next to the code they cover
 │   ├── App.css              # Application styles
 │   └── main.tsx             # Entry point
 ├── public/                  # Static assets
@@ -287,7 +288,7 @@ npm run lint:fix
 
 **Docker Build Fails**:
 - Ensure Docker daemon is running
-- Check Node.js version (>= 20.0.0)
+- Check Node.js version (>= 26.0.0)
 - Verify `package-lock.json` is present
 
 **404 Errors in Production**:

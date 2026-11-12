@@ -50,7 +50,6 @@ export type ExtendedAppDefinition = AppDefinition & {
     serviceAuthToken?: string;
     buildSystems?: BuildSystemOption[];
     image?: string;
-    Image?: string;
     visible?: boolean;
 };
 
@@ -114,11 +113,14 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
     sentryEnable?: boolean;
     sentryEnvironment?: string;
     sentryDsn?: string;
+    sentryTracesSampleRate?: number;
     privacy?: PrivacyConfig;
     /** Hosts a git link without an Artemis token may clone from; default `github.com` (see git-launch.ts). */
     allowedGitHosts?: string[];
     /** Variables added to every session, e.g. `SCORPIO_GITHUB_CLIENT_ID` (chart: `landingPage.sessionEnv`). */
     sessionEnv?: Record<string, string>;
+    /** Hosts whose Artemis links may start a session without a click. */
+    trustedArtemisHosts?: string[];
 };
 
 /**
