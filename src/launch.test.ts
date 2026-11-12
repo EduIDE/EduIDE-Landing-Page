@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAnonymousUser, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
+import { createAnonymousUser, createLaunchEnv, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
 
 const noWait = (): Promise<void> => Promise.resolve();
 const failure = (status: number, code?: string): object => ({ status, originalError: { code } });
@@ -92,5 +92,29 @@ describe('createAnonymousUser', () => {
     it('creates a different id each time', () => {
         expect(createAnonymousUser()).toMatch(/^anonymous-[0-9a-f]{16}$/);
         expect(createAnonymousUser()).not.toBe(createAnonymousUser());
+    });
+});
+
+describe('createLaunchEnv', () => {
+    it('passes gitRef and source as GIT_REF and GIT_SOURCE', () => {
+        expect(createLaunchEnv({ gitUri: 'https://github.com/o/r.git', gitRef: 'main', gitSource: 'github' })).toEqual({
+            THEIA: 'true',
+            GIT_URI: 'https://github.com/o/r.git',
+            GIT_REF: 'main',
+            GIT_SOURCE: 'github'
+        });
+    });
+
+    it('adds the session env, but lets the launch values win', () => {
+        expect(
+            createLaunchEnv({
+                gitUri: 'https://github.com/o/r.git',
+                sessionEnv: { SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'no', GIT_URI: 'x' }
+            })
+        ).toEqual({ SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'true', GIT_URI: 'https://github.com/o/r.git' });
+    });
+
+    it('leaves out what the link does not set', () => {
+        expect(createLaunchEnv({})).toEqual({ THEIA: 'true' });
     });
 });

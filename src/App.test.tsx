@@ -309,6 +309,34 @@ describe('URL parameters', () => {
         }
     );
 
+    it('asks to confirm a git link that names an app, and passes gitRef and source', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: PUBLIC_GIT_URI, gitRef: 'main', source: 'github' }));
+        screen.getByText('Open org/my-repo');
+        expect(theia.ping).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: /Open org\/my-repo in Java 17/ }));
+        await launchCount(1);
+        expect(launchRequest().env.fromMap).toMatchObject({ GIT_URI: PUBLIC_GIT_URI, GIT_REF: 'main', GIT_SOURCE: 'github' });
+    });
+
+    it('names the repository in the picker after choosing another language', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: PUBLIC_GIT_URI }));
+        fireEvent.click(screen.getByRole('button', { name: 'Choose another language' }));
+        screen.getByText('Choose the programming language for org/my-repo');
+    });
+
+    it('shows only the reason for a git link it refuses', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI }));
+        screen.getByText(/must not contain credentials/);
+        expect(screen.queryByRole('button', { name: /Open|Launch|Continue/ })).toBeNull();
+        expect(screen.queryByTestId('launch-app-java-17')).toBeNull();
+    });
+
+    it('adds the configured session env to every launch', async () => {
+        await renderApp('/', { ...BASE_CONFIG, sessionEnv: { SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'no' } });
+        await selectApp('java-17');
+        expect(launchRequest().env.fromMap).toMatchObject({ SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'true' });
+    });
+
     it.each([
         ['the repository host is not trusted', { gitUri: 'https://evil.example/r.git', artemisUrl: TRUSTED_URL }],
         ['the Artemis host is not trusted', { gitUri: GIT_URI, artemisUrl: 'https://evil.example' }],
