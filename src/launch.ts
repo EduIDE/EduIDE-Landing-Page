@@ -60,11 +60,15 @@ export function createLaunchEnv(link: {
     artemisToken?: string;
     artemisUrl?: string;
     gitUri?: string;
+    gitRef?: string;
+    gitSource?: string;
     gitUser?: string;
     gitMail?: string;
     buildSystemId?: string;
+    sessionEnv?: Record<string, string>;
 }): Record<string, string> {
-    const env: Record<string, string> = { THEIA: 'true' };
+    // Installation-wide variables first, so a launch's own values win.
+    const env: Record<string, string> = { ...link.sessionEnv, THEIA: 'true' };
     if (link.artemisToken) {
         env.ARTEMIS_TOKEN = link.artemisToken;
     }
@@ -79,6 +83,12 @@ export function createLaunchEnv(link: {
     }
     if (link.gitMail) {
         env.GIT_MAIL = link.gitMail;
+    }
+    if (link.gitRef) {
+        env.GIT_REF = link.gitRef;
+    }
+    if (link.gitSource) {
+        env.GIT_SOURCE = link.gitSource;
     }
     if (link.buildSystemId) {
         env.TEMPLATE = link.buildSystemId;

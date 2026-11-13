@@ -51,6 +51,7 @@ const BASE_CONFIG = {
     useKeycloak: false,
     useEphemeralStorage: true,
     trustedArtemisHosts: ['git.example'],
+    allowedGitHosts: ['git.example'],
     additionalApps: [JAVA, C_MULTI, RUST_SINGLE, HIDDEN]
 };
 const KEYCLOAK_CONFIG = {
@@ -63,6 +64,8 @@ const KEYCLOAK_CONFIG = {
 
 const LOADING_TEXT = /hang in tight/;
 const GIT_URI = 'https://student:SECRET@git.example/org/my-repo.git';
+// A link without an Artemis token must not carry credentials, so it is refused with GIT_URI.
+const PUBLIC_GIT_URI = 'https://git.example/org/my-repo.git';
 const TRUSTED_URL = 'https://git.example';
 
 // App.tsx keeps one-time init state at module level, so each test needs a fresh copy of it.
@@ -297,14 +300,42 @@ describe('URL parameters', () => {
         expect(launchRequest().appDefinition).toBe('default-app');
     });
 
-    it.each([[{ gitUri: GIT_URI }], [{ artemisToken: 'token' }], [{ appDef: 'java-17' }]])(
+    it.each([[{ gitUri: PUBLIC_GIT_URI }], [{ artemisToken: 'token' }], [{ appDef: 'java-17' }]])(
         'does not auto-launch with only %j',
         async params => {
             await renderApp(query(params));
-            screen.getByText('Choose your programming language');
+            screen.getByText(/Choose (your|the) programming language/);
             expect(theia.ping).not.toHaveBeenCalled();
         }
     );
+
+    it('asks to confirm a git link that names an app, and passes gitRef and source', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: PUBLIC_GIT_URI, gitRef: 'main', source: 'github' }));
+        screen.getByText('Open org/my-repo');
+        expect(theia.ping).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByRole('button', { name: /Open org\/my-repo in Java 17/ }));
+        await launchCount(1);
+        expect(launchRequest().env.fromMap).toMatchObject({ GIT_URI: PUBLIC_GIT_URI, GIT_REF: 'main', GIT_SOURCE: 'github' });
+    });
+
+    it('names the repository in the picker after choosing another language', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: PUBLIC_GIT_URI }));
+        fireEvent.click(screen.getByRole('button', { name: 'Choose another language' }));
+        screen.getByText('Choose the programming language for org/my-repo');
+    });
+
+    it('shows only the reason for a git link it refuses', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI }));
+        screen.getByText(/must not contain credentials/);
+        expect(screen.queryByRole('button', { name: /Open|Launch|Continue/ })).toBeNull();
+        expect(screen.queryByTestId('launch-app-java-17')).toBeNull();
+    });
+
+    it('adds the configured session env to every launch', async () => {
+        await renderApp('/', { ...BASE_CONFIG, sessionEnv: { SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'no' } });
+        await selectApp('java-17');
+        expect(launchRequest().env.fromMap).toMatchObject({ SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'true' });
+    });
 
     it.each([
         ['the repository host is not trusted', { gitUri: 'https://evil.example/r.git', artemisUrl: TRUSTED_URL }],
@@ -563,7 +594,10 @@ describe('workspace naming', () => {
     });
 
     it('builds a repository name from app, repository and user, without credentials', async () => {
-        const name = await workspaceFor(url('ada', GIT_URI), PERSISTENT);
+        await confirmUser(query({ user: 'ada', appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token' }), PERSISTENT);
+        fireEvent.click(screen.getByRole('button', { name: /Launch Java 17/ }));
+        await launchCount(1);
+        const name = launchRequest().workspaceName;
         expect(name).toMatch(/^ws-java-17-my-repo-ada-[0-9a-f]{8}$/);
         expect(name).not.toContain('secret');
     });
@@ -602,8 +636,8 @@ describe('workspace naming', () => {
     // Bug: the repository workspace hash (App.tsx) covers only gitUri and the build system, unlike the playground one.
     // Two users sharing a 12 character prefix therefore get the same workspace for the same repository.
     it('tells apart users whose names only differ after the truncation for a repository', async () => {
-        expect(await workspaceFor(url('alexandra-miller', GIT_URI), PERSISTENT)).not.toBe(
-            await workspaceFor(url('alexandra-milner', GIT_URI), PERSISTENT)
+        expect(await workspaceFor(url('alexandra-miller', PUBLIC_GIT_URI), PERSISTENT)).not.toBe(
+            await workspaceFor(url('alexandra-milner', PUBLIC_GIT_URI), PERSISTENT)
         );
     });
 });
@@ -750,7 +784,7 @@ describe('build-system picker', () => {
         expect(launchRequest().env.fromMap.TEMPLATE).toBeUndefined();
     });
 
-    it.each([[{ gitUri: GIT_URI }], [{ artemisToken: 'token' }]])('is skipped with %j', async params => {
+    it.each([[{ gitUri: PUBLIC_GIT_URI }], [{ artemisToken: 'token' }]])('is skipped with %j', async params => {
         await renderApp(query(params));
         await selectApp('c-lang');
         expect(screen.queryByText('Choose your build system')).toBeNull();
@@ -758,7 +792,7 @@ describe('build-system picker', () => {
     });
 
     it('does not auto-select a single build system with gitUri', async () => {
-        await renderApp(query({ gitUri: GIT_URI }));
+        await renderApp(query({ gitUri: PUBLIC_GIT_URI }));
         await selectApp('rust');
         expect(launchRequest().env.fromMap.TEMPLATE).toBeUndefined();
     });
