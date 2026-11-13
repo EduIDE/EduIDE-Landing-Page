@@ -127,6 +127,11 @@ included, deliberately** — that is what carries `gitUri` and `artemisToken`
 through the Keycloak round trip. There is a commit that exists solely to fix
 this. Do not simplify it to `window.location.origin`.
 
+It drops the fragment, though. After a login Keycloak returns with
+`#state=...&code=...`, and keycloak-js reuses the init `redirectUri` as the
+logout `post_logout_redirect_uri`. Keycloak rejects any redirect URI with a
+fragment ("Invalid redirect uri"), whatever the client's wildcards say.
+
 With `useKeycloak: false` the app invents `anonymous-<random>` as the user and
 suppresses the whole Keycloak UI. That is the default in the checked-in dev
 config.

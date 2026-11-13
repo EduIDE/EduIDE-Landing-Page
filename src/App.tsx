@@ -31,8 +31,9 @@ let keycloakClient: Keycloak | undefined = undefined;
 // Matches the gateway's request timeout (gateway.serviceRouteRequestTimeout in the chart).
 const LAUNCH_REQUEST_TIMEOUT = 60000;
 
+// Drop the fragment: after login it holds Keycloak's state/code, and Keycloak rejects any redirect URI with a fragment (breaks logout).
 function getCurrentRedirectUri(): string {
-    return window.location.href;
+    return window.location.href.split('#')[0];
 }
 
 function App(): React.JSX.Element {
