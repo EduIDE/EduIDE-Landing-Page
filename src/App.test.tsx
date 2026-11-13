@@ -393,6 +393,14 @@ describe('authentication', () => {
             expect(window.location.href).toContain(url);
         });
 
+        it('drops the Keycloak callback fragment from the redirect URI but keeps the query string', async () => {
+            const url = query({ gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL });
+            await renderApp(`${url}#state=abc&session_state=xyz&code=123`, KEYCLOAK_CONFIG);
+            const { redirectUri } = keycloak.init.mock.calls[0][0] as { redirectUri: string };
+            expect(redirectUri).not.toContain('#');
+            expect(redirectUri).toContain(url);
+        });
+
         it('asks anonymous visitors to log in and does not auto-launch', async () => {
             await renderApp(query({ gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }), KEYCLOAK_CONFIG);
             screen.getByText('Login to use EduIDE');
