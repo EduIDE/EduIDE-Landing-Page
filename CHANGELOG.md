@@ -5,6 +5,8 @@ The section of a version becomes the notes of its GitHub Release.
 
 ## [Unreleased]
 
+- Explain error 555 (the cluster has no free resources right now) instead of showing the raw reason.
+
 ## [1.4.1] - 2026-11-16
 
 ### Fixes

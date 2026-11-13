@@ -380,6 +380,12 @@ function App(): React.JSX.Element {
                                     setError('Your previous session is still shutting down.\nPlease try again in a few seconds.');
                                     return;
                                 }
+                                if (err && (err as any).status === 555) {
+                                    setError(
+                                        'There are no free resources for a new session right now.\n' + 'Please try again in a few minutes.'
+                                    );
+                                    return;
+                                }
                                 setError(err.message);
                             })
                             .finally(() => {
