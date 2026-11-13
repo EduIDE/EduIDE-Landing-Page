@@ -39,6 +39,7 @@ describe('SelectApp', () => {
                     { appId: 'shown', appName: 'Shown', visible: true },
                     { appId: 'hidden', appName: 'Hidden', visible: false }
                 ]}
+                useEphemeralStorage={false}
                 onSelectApp={vi.fn()}
             />
         );
@@ -54,7 +55,7 @@ describe('SelectApp', () => {
         ['keeps a filename', { appName: 'Java', image: 'jdk.SVG' }, '/assets/logos/jdk.SVG'],
         ['keeps an absolute path', { appName: 'Java', image: '/custom/logo.png' }, '/custom/logo.png']
     ])('logo %s', (_, app, expected) => {
-        render(<SelectApp appDefinitions={[{ appId: 'id', ...app }]} onSelectApp={vi.fn()} />);
+        render(<SelectApp appDefinitions={[{ appId: 'id', ...app }]} useEphemeralStorage={false} onSelectApp={vi.fn()} />);
         expect(screen.getByRole('img').getAttribute('src')).toBe(expected);
     });
 
@@ -66,6 +67,7 @@ describe('SelectApp', () => {
                     { serviceAuthToken: 'token', appId: 'ignored', appName: 'New' },
                     { appId: 'legacy', appName: 'Old' }
                 ]}
+                useEphemeralStorage={false}
                 onSelectApp={onSelectApp}
             />
         );
@@ -78,7 +80,7 @@ describe('SelectApp', () => {
     });
 
     it('renders nothing selectable without apps', () => {
-        render(<SelectApp appDefinitions={undefined} onSelectApp={vi.fn()} />);
+        render(<SelectApp appDefinitions={undefined} useEphemeralStorage={false} onSelectApp={vi.fn()} />);
         expect(screen.queryByRole('button')).toBeNull();
     });
 });
@@ -103,6 +105,44 @@ describe('SelectBuildSystem', () => {
         expect(onSelect).toHaveBeenCalledWith('bazel');
         fireEvent.click(screen.getByRole('button', { name: /Back/ }));
         expect(onBack).toHaveBeenCalledOnce();
+    });
+});
+
+describe('persistence badge', () => {
+    it('shows Temporary or Saved per app, falling back to the installation default', () => {
+        render(
+            <SelectApp
+                appDefinitions={[
+                    { appId: 'a', appName: 'Inherits' },
+                    { appId: 'b', appName: 'Keeps', ephemeral: false },
+                    { appId: 'c', appName: 'Discards', ephemeral: true }
+                ]}
+                useEphemeralStorage={true}
+                onSelectApp={vi.fn()}
+            />
+        );
+        const badge = (id: string): string | null =>
+            screen.getByTestId(`launch-app-${id}`).querySelector('.App__badge')!.firstChild!.textContent;
+        expect(badge('a')).toBe('Temporary');
+        expect(badge('b')).toBe('Saved');
+        expect(badge('c')).toBe('Temporary');
+    });
+
+    it('describes the tile through a tooltip that keyboard focus on the tile reaches', () => {
+        render(
+            <SelectApp appDefinitions={[{ appId: 'a', appName: 'A', ephemeral: false }]} useEphemeralStorage={true} onSelectApp={vi.fn()} />
+        );
+        const tile = screen.getByTestId('launch-app-a');
+        expect(tile.getAttribute('aria-describedby')).toBe(screen.getByRole('tooltip', { hidden: true }).id);
+        expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe('Files are kept between sessions.');
+    });
+
+    it('is repeated on the launch screen and the progress screen', () => {
+        const { rerender } = render(<LaunchApp appName='Java' appDefinition='java-17' ephemeral={true} onStartSession={vi.fn()} />);
+        screen.getByText('Temporary');
+        rerender(<Loading ephemeral={false} />);
+        screen.getByText('Saved');
+        expect(screen.getAllByText('Files are kept between sessions.').length).toBeGreaterThan(0);
     });
 });
 

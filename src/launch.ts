@@ -1,3 +1,12 @@
+// The app's own setting wins over the installation-wide default.
+export function isEphemeralLaunch(app: { ephemeral?: boolean } | undefined, useEphemeralStorage: boolean): boolean {
+    return app?.ephemeral ?? useEphemeralStorage;
+}
+
+export function persistenceHint(ephemeral: boolean): string {
+    return ephemeral ? 'Files are lost when the session ends.' : 'Files are kept between sessions.';
+}
+
 const WORKSPACE_SEGMENT_LIMIT = 12;
 const LAUNCH_RETRIES = 4;
 const GATEWAY_ERRORS = [502, 503, 504];

@@ -51,6 +51,8 @@ export type ExtendedAppDefinition = AppDefinition & {
     buildSystems?: BuildSystemOption[];
     image?: string;
     visible?: boolean;
+    /** Whether sessions of this app discard their files. Falls back to useEphemeralStorage. */
+    ephemeral?: boolean;
 };
 
 /**

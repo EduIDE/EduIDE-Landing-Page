@@ -60,6 +60,7 @@ const KEYCLOAK_CONFIG = {
     keycloakRealm: 'realm',
     keycloakClientId: 'client'
 };
+const PERSISTENT_KEYCLOAK = { ...KEYCLOAK_CONFIG, useEphemeralStorage: false };
 
 const LOADING_TEXT = /hang in tight/;
 const GIT_URI = 'https://student:SECRET@git.example/org/my-repo.git';
@@ -107,12 +108,13 @@ function launchRequest(call = 0): Record<string, any> {
 
 async function renderAuthenticated(
     url = '/',
-    parsedToken: Record<string, string> = { email: 'ada@example.org', preferred_username: 'ada' }
+    parsedToken: Record<string, string> = { email: 'ada@example.org', preferred_username: 'ada' },
+    config: unknown = KEYCLOAK_CONFIG
 ): Promise<void> {
     keycloak.idToken = 'id-token';
     keycloak.idTokenParsed = parsedToken;
     keycloak.init.mockResolvedValue(true);
-    await renderApp(url, KEYCLOAK_CONFIG);
+    await renderApp(url, config);
     await screen.findByText('Choose your programming language');
 }
 
@@ -466,13 +468,13 @@ describe('authentication', () => {
         });
 
         it('names the workspace after the username, falling back to the email', async () => {
-            await renderAuthenticated();
+            await renderAuthenticated('/', undefined, PERSISTENT_KEYCLOAK);
             await selectApp('rust');
             expect(launchRequest().workspaceName).toMatch(/^ws-rust-cargo-playground-ada-[0-9a-f]+$/);
 
             cleanup();
             theia.launchAndRedirect.mockClear();
-            await renderAuthenticated('/', { email: 'ada@example.org' });
+            await renderAuthenticated('/', { email: 'ada@example.org' }, PERSISTENT_KEYCLOAK);
             await selectApp('rust');
             expect(launchRequest().workspaceName).toMatch(/^ws-rust-cargo-playground-ada-example-+[0-9a-f]+$/);
         });
@@ -764,21 +766,41 @@ describe('build-system picker', () => {
         expect(launchRequest().env.fromMap.TEMPLATE).toBeUndefined();
     });
 
-    it('never launches a build system ephemerally, even with useEphemeralStorage on', async () => {
+    it('launches a build system ephemerally when the app is ephemeral, still sending TEMPLATE', async () => {
         await renderApp();
         await pickBuildSystem('make');
-        expect(launchRequest().ephemeral).toBe(false);
-        expect(launchRequest().workspaceName).toBeDefined();
+        expect(launchRequest().ephemeral).toBe(true);
+        expect(launchRequest().env.fromMap.TEMPLATE).toBe('make');
     });
 
-    it('never launches an auto-selected build system ephemerally', async () => {
+    it('launches an auto-selected build system ephemerally', async () => {
         await renderApp();
         await selectApp('rust');
+        expect(launchRequest().ephemeral).toBe(true);
+    });
+
+    it('lets an app opt out of the installation default and keeps per-template workspaces', async () => {
+        await renderApp('/', {
+            ...BASE_CONFIG,
+            additionalApps: BASE_CONFIG.additionalApps!.map(a => (a.serviceAuthToken === 'rust' ? { ...a, ephemeral: false } : a))
+        });
+        await selectApp('rust');
         expect(launchRequest().ephemeral).toBe(false);
+        expect(launchRequest().workspaceName).toMatch(/^ws-rust-cargo-/);
+    });
+
+    it('lets an app opt in to ephemeral when the installation is persistent', async () => {
+        await renderApp('/', {
+            ...BASE_CONFIG,
+            useEphemeralStorage: false,
+            additionalApps: BASE_CONFIG.additionalApps!.map(a => (a.serviceAuthToken === 'java-17' ? { ...a, ephemeral: true } : a))
+        });
+        await selectApp('java-17');
+        expect(launchRequest().ephemeral).toBe(true);
     });
 
     it('gives each build system its own workspace', async () => {
-        await confirmUser(query({ user: 'ada' }));
+        await confirmUser(query({ user: 'ada' }), { ...BASE_CONFIG, useEphemeralStorage: false });
         await pickBuildSystem('make');
         await waitFor(() => screen.getByText('Choose your build system'));
         fireEvent.click(screen.getByTestId('build-system-bazel'));

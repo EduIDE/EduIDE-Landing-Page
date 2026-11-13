@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAnonymousUser, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
+import { createAnonymousUser, createWorkspaceName, isEphemeralLaunch, isTrustedArtemisLink, launchWithRetry } from './launch';
 
 const noWait = (): Promise<void> => Promise.resolve();
 const failure = (status: number, code?: string): object => ({ status, originalError: { code } });
@@ -92,5 +92,17 @@ describe('createAnonymousUser', () => {
     it('creates a different id each time', () => {
         expect(createAnonymousUser()).toMatch(/^anonymous-[0-9a-f]{16}$/);
         expect(createAnonymousUser()).not.toBe(createAnonymousUser());
+    });
+});
+
+describe('isEphemeralLaunch', () => {
+    it.each([
+        [undefined, true, true],
+        [undefined, false, false],
+        [{}, true, true],
+        [{ ephemeral: false }, true, false],
+        [{ ephemeral: true }, false, true]
+    ])('app %j with installation default %s gives %s', (app, installation, expected) => {
+        expect(isEphemeralLaunch(app, installation)).toBe(expected);
     });
 });
