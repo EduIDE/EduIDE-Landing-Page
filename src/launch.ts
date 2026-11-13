@@ -1,6 +1,6 @@
-// The app's own setting wins over the installation-wide default.
-export function isEphemeralLaunch(app: { ephemeral?: boolean } | undefined, useEphemeralStorage: boolean): boolean {
-    return app?.ephemeral ?? useEphemeralStorage;
+// The app's own setting wins over the installation-wide default. Anything but a boolean (a chart could emit a string) is ignored.
+export function isEphemeralLaunch(app: { ephemeral?: unknown } | undefined, useEphemeralStorage: boolean): boolean {
+    return typeof app?.ephemeral === 'boolean' ? app.ephemeral : useEphemeralStorage;
 }
 
 export function persistenceHint(ephemeral: boolean): string {

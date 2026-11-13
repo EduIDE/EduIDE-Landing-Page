@@ -530,8 +530,3 @@
     text-align: center;
     margin: 0 auto 1rem;
 }
-
-/* Inside a standalone line the tooltip text is already printed next to the badge. */
-.Loading__persistence .App__badge-tooltip {
-    display: none;
-}

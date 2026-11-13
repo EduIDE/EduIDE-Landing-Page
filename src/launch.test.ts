@@ -101,7 +101,9 @@ describe('isEphemeralLaunch', () => {
         [undefined, false, false],
         [{}, true, true],
         [{ ephemeral: false }, true, false],
-        [{ ephemeral: true }, false, true]
+        [{ ephemeral: true }, false, true],
+        [{ ephemeral: 'false' }, true, true],
+        [{ ephemeral: 'true' }, false, false]
     ])('app %j with installation default %s gives %s', (app, installation, expected) => {
         expect(isEphemeralLaunch(app, installation)).toBe(expected);
     });

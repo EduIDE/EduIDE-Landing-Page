@@ -121,28 +121,29 @@ describe('persistence badge', () => {
                 onSelectApp={vi.fn()}
             />
         );
-        const badge = (id: string): string | null =>
-            screen.getByTestId(`launch-app-${id}`).querySelector('.App__badge')!.firstChild!.textContent;
-        expect(badge('a')).toBe('Temporary');
-        expect(badge('b')).toBe('Saved');
-        expect(badge('c')).toBe('Temporary');
+        expect(screen.getByTestId('launch-app-a').textContent).toContain('Temporary');
+        expect(screen.getByTestId('launch-app-b').textContent).toContain('Saved');
+        expect(screen.getByTestId('launch-app-c').textContent).toContain('Temporary');
     });
 
-    it('describes the tile through a tooltip that keyboard focus on the tile reaches', () => {
+    it('describes the tile once, keeping the tooltip out of the accessible name', () => {
         render(
             <SelectApp appDefinitions={[{ appId: 'a', appName: 'A', ephemeral: false }]} useEphemeralStorage={true} onSelectApp={vi.fn()} />
         );
-        const tile = screen.getByTestId('launch-app-a');
-        expect(tile.getAttribute('aria-describedby')).toBe(screen.getByRole('tooltip', { hidden: true }).id);
-        expect(screen.getByRole('tooltip', { hidden: true }).textContent).toBe('Files are kept between sessions.');
+        const tile = screen.getByRole('button', { name: 'A logo Select A Saved' });
+        const tooltip = screen.getByRole('tooltip', { hidden: true });
+        expect(tooltip.getAttribute('aria-hidden')).toBe('true');
+        expect(tile.getAttribute('aria-describedby')).toBe(tooltip.id);
+        expect(tooltip.textContent).toBe('Files are kept between sessions.');
     });
 
-    it('is repeated on the launch screen and the progress screen', () => {
+    it('is repeated with its hint on the launch screen and the progress screen', () => {
         const { rerender } = render(<LaunchApp appName='Java' appDefinition='java-17' ephemeral={true} onStartSession={vi.fn()} />);
         screen.getByText('Temporary');
+        screen.getByText(/Files are lost when the session ends\./);
         rerender(<Loading ephemeral={false} />);
         screen.getByText('Saved');
-        expect(screen.getAllByText('Files are kept between sessions.').length).toBeGreaterThan(0);
+        screen.getByText(/Files are kept between sessions\./);
     });
 });
 

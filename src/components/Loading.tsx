@@ -1,4 +1,3 @@
-import { persistenceHint } from '../launch';
 import { PersistenceBadge } from './PersistenceBadge';
 import { Spinner } from './Spinner';
 
@@ -24,7 +23,7 @@ export const Loading: React.FC<LoadingProps> = ({ text, ephemeral }: LoadingProp
             <p className='Loading__description'>{calculatedText}</p>
             {ephemeral !== undefined && (
                 <p className='Loading__persistence'>
-                    <PersistenceBadge ephemeral={ephemeral} /> {persistenceHint(ephemeral)}
+                    <PersistenceBadge ephemeral={ephemeral} inline />
                 </p>
             )}
         </div>

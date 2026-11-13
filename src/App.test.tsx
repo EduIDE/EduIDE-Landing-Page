@@ -288,6 +288,17 @@ describe('URL parameters', () => {
         screen.getByRole('button', { name: /Launch Java 17/ });
     });
 
+    it('launches an Artemis link to an app with ephemeral: false on a repository workspace without TEMPLATE', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }), {
+            ...BASE_CONFIG,
+            additionalApps: BASE_CONFIG.additionalApps!.map(a => (a.serviceAuthToken === 'java-17' ? { ...a, ephemeral: false } : a))
+        });
+        await launchCount(1);
+        expect(launchRequest().ephemeral).toBe(false);
+        expect(launchRequest().workspaceName).toMatch(/^ws-java-17-my-repo-/);
+        expect(launchRequest().env.fromMap.TEMPLATE).toBeUndefined();
+    });
+
     it('also reads the lower-case appdef', async () => {
         await renderApp(query({ appdef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
         await launchCount(1);
@@ -693,6 +704,19 @@ describe('launching', () => {
         expect(launchRequest(1).workspaceName).toMatch(/^ws-java-17-playground-/);
         expect(launchRequest(1).env).toEqual(launchRequest(0).env);
         expect(screen.queryByText(/ERROR/)).toBeNull();
+    });
+
+    it('refused ephemeral template launch retries on the per-template workspace, keeps TEMPLATE and shows Saved meanwhile', async () => {
+        theia.launchAndRedirect.mockRejectedValueOnce(rejection(400)).mockReturnValueOnce(new Promise(() => undefined));
+        await renderApp();
+        fireEvent.click(screen.getByTestId('launch-app-c-lang'));
+        fireEvent.click(screen.getByTestId('build-system-make'));
+        await waitFor(() => expect(theia.launchAndRedirect).toHaveBeenCalledTimes(2));
+        expect(launchRequest(0).ephemeral).toBe(true);
+        expect(launchRequest(1).ephemeral).toBe(false);
+        expect(launchRequest(1).workspaceName).toMatch(/^ws-c-lang-make-playground-/);
+        expect(launchRequest(1).env.fromMap.TEMPLATE).toBe('make');
+        await screen.findByText('Saved');
     });
 
     it.each([

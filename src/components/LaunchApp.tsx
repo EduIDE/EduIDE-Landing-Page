@@ -15,7 +15,7 @@ export const LaunchApp: React.FC<LaunchAppProps> = ({ appName, appDefinition, gi
             {repositoryHost && <p className='App__launch-source'>This link opens a repository from {repositoryHost}.</p>}
             {ephemeral !== undefined && (
                 <p className='App__launch-persistence'>
-                    <PersistenceBadge ephemeral={ephemeral} />
+                    <PersistenceBadge ephemeral={ephemeral} inline />
                 </p>
             )}
             <button className='App__try-now-button' onClick={() => onStartSession(appDefinition)}>
