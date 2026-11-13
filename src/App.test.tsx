@@ -669,6 +669,14 @@ describe('launching', () => {
         await screen.findByText(/The app definition 'java-17' is not available in the cluster/);
     });
 
+    it('tells the user when the cluster has no free resources', async () => {
+        theia.launchAndRedirect.mockRejectedValue(rejection(555));
+        await renderApp();
+        await selectApp('java-17');
+        await screen.findByText(/There are no free resources for a new session right now/);
+        expect(theia.launchAndRedirect).toHaveBeenCalledTimes(1);
+    });
+
     it('shows other launch errors and hides the info message', async () => {
         theia.launchAndRedirect.mockRejectedValue(rejection(500, {}, 'kaputt'));
         await renderApp();
