@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getServiceAuthToken } from '../common-extensions/types';
@@ -121,9 +121,9 @@ describe('persistence badge', () => {
                 onSelectApp={vi.fn()}
             />
         );
-        expect(screen.getByTestId('launch-app-a').textContent).toContain('Temporary');
-        expect(screen.getByTestId('launch-app-b').textContent).toContain('Saved');
-        expect(screen.getByTestId('launch-app-c').textContent).toContain('Temporary');
+        within(screen.getByRole('button', { name: /Inherits/ })).getByText('Temporary');
+        within(screen.getByRole('button', { name: /Keeps/ })).getByText('Saved');
+        within(screen.getByRole('button', { name: /Discards/ })).getByText('Temporary');
     });
 
     it('describes the tile once, keeping the tooltip out of the accessible name', () => {
