@@ -1,3 +1,12 @@
+// The app's own setting wins over the installation-wide default. Anything but a boolean (a chart could emit a string) is ignored.
+export function isEphemeralLaunch(app: { ephemeral?: unknown } | undefined, useEphemeralStorage: boolean): boolean {
+    return typeof app?.ephemeral === 'boolean' ? app.ephemeral : useEphemeralStorage;
+}
+
+export function persistenceHint(ephemeral: boolean): string {
+    return ephemeral ? 'Files are lost when the session ends.' : 'Files are kept between sessions.';
+}
+
 const WORKSPACE_SEGMENT_LIMIT = 12;
 const LAUNCH_RETRIES = 4;
 const GATEWAY_ERRORS = [502, 503, 504];

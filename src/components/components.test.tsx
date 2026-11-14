@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getServiceAuthToken } from '../common-extensions/types';
@@ -39,6 +39,7 @@ describe('SelectApp', () => {
                     { appId: 'shown', appName: 'Shown', visible: true },
                     { appId: 'hidden', appName: 'Hidden', visible: false }
                 ]}
+                useEphemeralStorage={false}
                 onSelectApp={vi.fn()}
             />
         );
@@ -54,7 +55,7 @@ describe('SelectApp', () => {
         ['keeps a filename', { appName: 'Java', image: 'jdk.SVG' }, '/assets/logos/jdk.SVG'],
         ['keeps an absolute path', { appName: 'Java', image: '/custom/logo.png' }, '/custom/logo.png']
     ])('logo %s', (_, app, expected) => {
-        render(<SelectApp appDefinitions={[{ appId: 'id', ...app }]} onSelectApp={vi.fn()} />);
+        render(<SelectApp appDefinitions={[{ appId: 'id', ...app }]} useEphemeralStorage={false} onSelectApp={vi.fn()} />);
         expect(screen.getByRole('img').getAttribute('src')).toBe(expected);
     });
 
@@ -66,6 +67,7 @@ describe('SelectApp', () => {
                     { serviceAuthToken: 'token', appId: 'ignored', appName: 'New' },
                     { appId: 'legacy', appName: 'Old' }
                 ]}
+                useEphemeralStorage={false}
                 onSelectApp={onSelectApp}
             />
         );
@@ -78,7 +80,7 @@ describe('SelectApp', () => {
     });
 
     it('renders nothing selectable without apps', () => {
-        render(<SelectApp appDefinitions={undefined} onSelectApp={vi.fn()} />);
+        render(<SelectApp appDefinitions={undefined} useEphemeralStorage={false} onSelectApp={vi.fn()} />);
         expect(screen.queryByRole('button')).toBeNull();
     });
 });
@@ -103,6 +105,45 @@ describe('SelectBuildSystem', () => {
         expect(onSelect).toHaveBeenCalledWith('bazel');
         fireEvent.click(screen.getByRole('button', { name: /Back/ }));
         expect(onBack).toHaveBeenCalledOnce();
+    });
+});
+
+describe('persistence badge', () => {
+    it('shows Temporary or Saved per app, falling back to the installation default', () => {
+        render(
+            <SelectApp
+                appDefinitions={[
+                    { appId: 'a', appName: 'Inherits' },
+                    { appId: 'b', appName: 'Keeps', ephemeral: false },
+                    { appId: 'c', appName: 'Discards', ephemeral: true }
+                ]}
+                useEphemeralStorage={true}
+                onSelectApp={vi.fn()}
+            />
+        );
+        within(screen.getByRole('button', { name: /Inherits/ })).getByText('Temporary');
+        within(screen.getByRole('button', { name: /Keeps/ })).getByText('Saved');
+        within(screen.getByRole('button', { name: /Discards/ })).getByText('Temporary');
+    });
+
+    it('describes the tile once, keeping the tooltip out of the accessible name', () => {
+        render(
+            <SelectApp appDefinitions={[{ appId: 'a', appName: 'A', ephemeral: false }]} useEphemeralStorage={true} onSelectApp={vi.fn()} />
+        );
+        const tile = screen.getByRole('button', { name: 'A logo Select A Saved' });
+        const tooltip = screen.getByRole('tooltip', { hidden: true });
+        expect(tooltip.getAttribute('aria-hidden')).toBe('true');
+        expect(tile.getAttribute('aria-describedby')).toBe(tooltip.id);
+        expect(tooltip.textContent).toBe('Files are kept between sessions.');
+    });
+
+    it('is repeated with its hint on the launch screen and the progress screen', () => {
+        const { rerender } = render(<LaunchApp appName='Java' appDefinition='java-17' ephemeral={true} onStartSession={vi.fn()} />);
+        screen.getByText('Temporary');
+        screen.getByText(/Files are lost when the session ends\./);
+        rerender(<Loading ephemeral={false} />);
+        expect(screen.getByRole('status').textContent).toContain('Saved');
+        screen.getByText(/Files are kept between sessions\./);
     });
 });
 

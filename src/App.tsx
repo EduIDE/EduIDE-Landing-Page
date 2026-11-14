@@ -22,7 +22,14 @@ import { SelectBuildSystem } from './components/SelectBuildSystem';
 import { SessionEnded } from './components/SessionEnded';
 import type { LastLaunch, LaunchInputs } from './lastLaunch';
 import { clearLastLaunch, readLastLaunch, saveLastLaunch } from './lastLaunch';
-import { createAnonymousUser, createLaunchEnv, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
+import {
+    createAnonymousUser,
+    createLaunchEnv,
+    createWorkspaceName,
+    isEphemeralLaunch,
+    isTrustedArtemisLink,
+    launchWithRetry
+} from './launch';
 import type { SessionEndReason } from './sessionEndReason';
 import { findSessionEndReason } from './sessionEndReason';
 
@@ -125,6 +132,7 @@ function App(): React.JSX.Element {
 
     const [standaloneWizardStep, setStandaloneWizardStep] = useState<'language' | 'buildSystem'>('language');
     const [standaloneAppDef, setStandaloneAppDef] = useState<string>();
+    const [launchEphemeral, setLaunchEphemeral] = useState<boolean>(config.useEphemeralStorage);
 
     if (!initialized) {
         const urlParams = new URLSearchParams(window.location.search);
@@ -258,6 +266,9 @@ function App(): React.JSX.Element {
         // this callback before it runs, and the workspace name would come out different.
         (appDefinition: string, buildSystemId?: string, replay?: LaunchInputs): void => {
             const inputs: LaunchInputs = replay ?? { gitUri, gitUser, gitMail, artemisUrl, artemisToken, anonymousUser: user };
+            const app = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appDefinition);
+            const tryEphemeral = isEphemeralLaunch(app, config.useEphemeralStorage);
+            setLaunchEphemeral(tryEphemeral);
             setLoading(true);
             setError(undefined);
 
@@ -313,12 +324,8 @@ function App(): React.JSX.Element {
                             return true;
                         };
 
-                        // `useEphemeralStorage` means "prefer ephemeral when possible".
+                        // The app's `ephemeral` setting (default: `useEphemeralStorage`) means "prefer ephemeral when possible".
                         // App definitions that require a shared workspace are retried with a PVC-backed workspace.
-                        // Template launches always use workspace-backed sessions so that env vars
-                        // are set directly on the container (eager/ephemeral sessions inject env
-                        // vars via data bridge which arrives after the entrypoint has already run).
-                        const tryEphemeral = config.useEphemeralStorage && !buildSystemId;
                         const rememberLaunch = (ephemeral: boolean): void =>
                             saveLastLaunch({
                                 ...inputs,
@@ -343,6 +350,7 @@ function App(): React.JSX.Element {
                                           `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
                                       );
                                       rememberLaunch(false);
+                                      setLaunchEphemeral(false);
                                       return launchWithRetry(() =>
                                           TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
                                       );
@@ -558,7 +566,7 @@ function App(): React.JSX.Element {
             />
             <div className='body'>
                 {loading ? (
-                    <Loading text={config.loadingText} />
+                    <Loading text={config.loadingText} ephemeral={launchEphemeral} />
                 ) : (
                     <div>
                         <div>
@@ -594,6 +602,10 @@ function App(): React.JSX.Element {
                                         appName={selectedAppName}
                                         appDefinition={selectedAppDefinition}
                                         gitUri={gitUri}
+                                        ephemeral={isEphemeralLaunch(
+                                            config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === selectedAppDefinition),
+                                            config.useEphemeralStorage
+                                        )}
                                         onStartSession={handleStartSession}
                                     />
                                 ) : standaloneWizardStep === 'buildSystem' ? (
@@ -603,7 +615,11 @@ function App(): React.JSX.Element {
                                         onBack={() => setStandaloneWizardStep('language')}
                                     />
                                 ) : (
-                                    <SelectApp appDefinitions={config.additionalApps} onSelectApp={handleAppSelected} />
+                                    <SelectApp
+                                        appDefinitions={config.additionalApps}
+                                        useEphemeralStorage={config.useEphemeralStorage}
+                                        onSelectApp={handleAppSelected}
+                                    />
                                 )}
                             </div>
                         </div>

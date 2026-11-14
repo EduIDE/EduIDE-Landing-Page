@@ -479,3 +479,54 @@
 }
 
 /* Animation removed - grid items appear instantly */
+
+.App__badge {
+    position: relative;
+    display: inline-block;
+    margin-top: 8px;
+    padding: 2px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--color-text-primary);
+}
+
+.App__badge[data-persistence='temporary'] {
+    border-style: dashed;
+}
+
+.App__badge-tooltip {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 6px);
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: 130px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background: var(--color-background-card);
+    color: var(--color-text-primary);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: normal;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 1;
+}
+
+/* Shown on hover and on keyboard focus of the tile; always available to screen readers via aria-describedby. */
+.App__grid-item:hover .App__badge-tooltip,
+.App__grid-item:focus-visible .App__badge-tooltip,
+.App__badge:hover .App__badge-tooltip {
+    opacity: 1;
+}
+
+.App__launch-persistence,
+.Loading__persistence {
+    text-align: center;
+    margin: 0 auto 1rem;
+}

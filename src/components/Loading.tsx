@@ -1,9 +1,11 @@
+import { PersistenceBadge } from './PersistenceBadge';
 import { Spinner } from './Spinner';
 
 interface LoadingProps {
     text?: string;
+    ephemeral?: boolean;
 }
-export const Loading: React.FC<LoadingProps> = ({ text }: LoadingProps): React.JSX.Element => {
+export const Loading: React.FC<LoadingProps> = ({ text, ephemeral }: LoadingProps): React.JSX.Element => {
     const calculatedText = text ?? 'We are launching a dedicated session for you, hang in tight, this might take up to 3 minutes.';
     return (
         <div
@@ -19,6 +21,11 @@ export const Loading: React.FC<LoadingProps> = ({ text }: LoadingProps): React.J
         >
             <Spinner />
             <p className='Loading__description'>{calculatedText}</p>
+            {ephemeral !== undefined && (
+                <p className='Loading__persistence' role='status'>
+                    <PersistenceBadge ephemeral={ephemeral} inline />
+                </p>
+            )}
         </div>
     );
 };
