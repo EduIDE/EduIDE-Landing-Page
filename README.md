@@ -7,7 +7,7 @@ Landing page for EduIDE Cloud workspace management, providing a user-friendly in
 - **User Authentication**: Keycloak-based authentication and authorization
 - **Workspace Management**: Launch and manage multiple cloud-based IDEs
 - **Dynamic Configuration**: Runtime configuration via `config.js`
-- **Query Parameters**: Support for various URL parameters (gitUri, gitToken, artemisToken, etc.)
+- **Query Parameters**: Support for various URL parameters (appDef, gitUri, gitUser, gitMail, artemisToken, artemisUrl)
 - **Responsive Design**: Modern UI with dark/light theme support
 
 ## Prerequisites
