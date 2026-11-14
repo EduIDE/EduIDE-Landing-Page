@@ -886,6 +886,21 @@ describe('session ended', () => {
         screen.getByRole('button', { name: 'Resume my session' });
     });
 
+    const withJava = (config: object, ephemeral: boolean): object => ({
+        ...config,
+        additionalApps: BASE_CONFIG.additionalApps!.map(a => (a.serviceAuthToken === 'java-17' ? { ...a, ephemeral } : a))
+    });
+
+    it('offers a resume for an app with ephemeral: false on an ephemeral installation', async () => {
+        await launchThenEnd(withJava(BASE_CONFIG, false));
+        screen.getByRole('button', { name: 'Resume my session' });
+    });
+
+    it('offers no resume for an app with ephemeral: true on a persistent installation', async () => {
+        await launchThenEnd(withJava(WORKSPACE_CONFIG, true));
+        expect(screen.queryByRole('button', { name: 'Resume my session' })).toBeNull();
+    });
+
     it('sends a tab without a stored launch back to the start page', async () => {
         await renderApp('/session-ended', WORKSPACE_CONFIG);
         screen.getByText(/choose your environment again/);
