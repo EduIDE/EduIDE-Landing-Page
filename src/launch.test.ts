@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAnonymousUser, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
+import { createAnonymousUser, createWorkspaceName, isTrustedArtemisLink, launchWithRetry, requireSessionUrl } from './launch';
 
 const noWait = (): Promise<void> => Promise.resolve();
 const failure = (status: number, code?: string): object => ({ status, originalError: { code } });
@@ -27,6 +27,12 @@ describe('launchWithRetry', () => {
         const launch = vi.fn().mockRejectedValue(error);
         await expect(launchWithRetry(launch, noWait)).rejects.toBe(error);
         expect(launch).toHaveBeenCalledTimes(1);
+    });
+
+    it('tries again when the service answers without a session URL', async () => {
+        const launch = vi.fn().mockResolvedValueOnce('').mockResolvedValue('session.example');
+        await expect(launchWithRetry(() => requireSessionUrl(launch()), noWait)).resolves.toBe('session.example');
+        expect(launch).toHaveBeenCalledTimes(2);
     });
 
     it('gives up after five attempts and waits between them', async () => {
