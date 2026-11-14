@@ -125,3 +125,18 @@ export async function launchWithRetry<T>(
         }
     }
 }
+
+// The service can answer 200 without a URL when a session vanished mid-launch. Treat that like a 503,
+// so launchWithRetry asks again instead of the browser being sent to "https://".
+export async function requireSessionUrl(url: Promise<string>): Promise<string> {
+    const resolved = await url;
+    if (!resolved) {
+        throw Object.assign(new Error('The session is still starting.'), { status: 503 });
+    }
+    return resolved;
+}
+
+export function redirectToSession(url: string): void {
+    console.log(`Redirect to: https://${url}`);
+    location.replace(`https://${url}`);
+}

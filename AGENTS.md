@@ -179,6 +179,8 @@ config.
 - **Launch requests retry only on 502, 503, 504 and timeouts**, in `launchWithRetry`.
   The gateway cuts requests off after 60s (`gateway.serviceRouteRequestTimeout`)
   while a slow session keeps starting, so a later request picks it up.
+  A 200 without a session URL counts as a 503 (`requireSessionUrl`), so the page never
+  redirects to an empty host. Launches go through `TheiaCloud.launch`, not `launchAndRedirect`.
 - The image runs nginx without root on **port 8080**, with a read-only filesystem
   in the chart. Only `/tmp` is writable.
 - The footer version comes from the chart, which defaults it to the landing
