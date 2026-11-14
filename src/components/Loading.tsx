@@ -22,7 +22,7 @@ export const Loading: React.FC<LoadingProps> = ({ text, ephemeral }: LoadingProp
             <Spinner />
             <p className='Loading__description'>{calculatedText}</p>
             {ephemeral !== undefined && (
-                <p className='Loading__persistence'>
+                <p className='Loading__persistence' role='status'>
                     <PersistenceBadge ephemeral={ephemeral} inline />
                 </p>
             )}

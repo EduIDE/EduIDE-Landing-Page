@@ -142,7 +142,7 @@ describe('persistence badge', () => {
         screen.getByText('Temporary');
         screen.getByText(/Files are lost when the session ends\./);
         rerender(<Loading ephemeral={false} />);
-        screen.getByText('Saved');
+        expect(screen.getByRole('status').textContent).toContain('Saved');
         screen.getByText(/Files are kept between sessions\./);
     });
 });
