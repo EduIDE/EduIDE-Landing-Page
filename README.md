@@ -305,7 +305,7 @@ This project uses GitHub Actions for automated Docker builds and multi-architect
 - **Push to main**: Builds and pushes to `latest` tag
 - **Pull Request**: Builds image for testing
 - **Manual Dispatch**: Build on demand with a custom tag
-- **Release**: `release.yml`, run by hand with a `version` input, builds the image as `X.Y.Z`, tags `vX.Y.Z` and creates the GitHub Release (see below)
+- **Release**: `release.yml`, run by hand with a `version` input, drafts the GitHub Release, builds the image as `X.Y.Z`, verifies it and publishes the release, which creates the `vX.Y.Z` tag (see below)
 
 ### Releasing
 

@@ -197,5 +197,5 @@ config.
 - Explicit return types on non-expression functions; it is a warning, and
   warnings are fatal.
 - Release tags are `vX.Y.Z`; the image tag is the same string without the `v`.
-- Releases are manual: `release.yml` (`workflow_dispatch`, input `version`) after a release PR that bumps `package.json` and `CHANGELOG.md`. Use the `release` skill. A release created by hand triggers nothing.
+- Releases are manual: `release.yml` (`workflow_dispatch`, input `version`) after a release PR that moves the `CHANGELOG.md` entries under `## [X.Y.Z]` (`package.json` is not a version file). Use the `release` skill. A release created by hand triggers nothing.
 - There are no license banners; do not add them.
