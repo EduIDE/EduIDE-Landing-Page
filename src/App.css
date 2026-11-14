@@ -226,7 +226,8 @@
     border-radius: 10px;
 }
 
-.App__confirm-identity {
+.App__confirm-identity,
+.App__session-ended {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -240,6 +241,13 @@
     border-radius: 16px;
     backdrop-filter: blur(5px);
     line-height: 1.5em;
+}
+
+.App__session-ended-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
 }
 
 .App__confirm-identity-name {

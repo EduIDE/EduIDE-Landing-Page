@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const theia = vi.hoisted(() => ({ ping: vi.fn(), launchAndRedirect: vi.fn() }));
+const theia = vi.hoisted(() => ({ ping: vi.fn(), launchAndRedirect: vi.fn(), Workspace: { listWorkspaces: vi.fn() } }));
 const keycloak = vi.hoisted(() => ({
     constructed: [] as unknown[],
     init: vi.fn(),
@@ -134,6 +134,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     theia.ping.mockReset().mockResolvedValue(true);
     theia.launchAndRedirect.mockReset().mockResolvedValue(undefined);
+    theia.Workspace.listWorkspaces.mockReset().mockResolvedValue([]);
     keycloak.constructed.length = 0;
     keycloak.init.mockReset().mockResolvedValue(false);
     keycloak.updateToken.mockReset().mockResolvedValue(true);
@@ -785,5 +786,134 @@ describe('build-system picker', () => {
 
         expect(launchRequest(0).workspaceName).toMatch(/^ws-c-lang-make-playground-ada-/);
         expect(launchRequest(1).workspaceName).toMatch(/^ws-c-lang-bazel-playground-ada-/);
+    });
+});
+
+describe('session ended', () => {
+    const WORKSPACE_CONFIG = { ...BASE_CONFIG, useEphemeralStorage: false };
+    const TRUSTED_LINK = { appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL };
+    const ENDED = 'Your session has ended';
+
+    beforeEach(() => window.sessionStorage.clear());
+
+    async function launchThenEnd(config: unknown = WORKSPACE_CONFIG): Promise<void> {
+        await renderApp('/', config);
+        await selectApp('java-17');
+        cleanup();
+        await renderApp('/session-ended', config);
+        screen.getByText(ENDED);
+    }
+
+    it('resumes into the same workspace with the same link', async () => {
+        await renderApp(query(TRUSTED_LINK), WORKSPACE_CONFIG);
+        await launchCount(1);
+        cleanup();
+
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        fireEvent.click(screen.getByRole('button', { name: 'Resume my session' }));
+        await launchCount(2);
+        expect(launchRequest(1).workspaceName).toBe(launchRequest(0).workspaceName);
+        expect(launchRequest(1).user).toBe(launchRequest(0).user);
+        expect(launchRequest(1).env).toEqual(launchRequest(0).env);
+    });
+
+    it('waits for a click, even with a trusted link in the URL', async () => {
+        await renderApp(`/session-ended?${new URLSearchParams(TRUSTED_LINK)}`, WORKSPACE_CONFIG);
+        screen.getByText(ENDED);
+        expect(theia.launchAndRedirect).not.toHaveBeenCalled();
+    });
+
+    it('offers no resume after an ephemeral session', async () => {
+        await launchThenEnd(BASE_CONFIG);
+        screen.getByText(/could not be kept/);
+        expect(screen.queryByRole('button', { name: 'Resume my session' })).toBeNull();
+    });
+
+    it('offers a resume when an ephemeral launch fell back to a workspace', async () => {
+        theia.launchAndRedirect.mockRejectedValueOnce(
+            Object.assign(new Error('rejected'), { status: 400, request: { kind: 'launchRequest', ephemeral: true } })
+        );
+        await renderApp();
+        await selectApp('java-17', 2);
+        cleanup();
+        await renderApp('/session-ended');
+        screen.getByRole('button', { name: 'Resume my session' });
+    });
+
+    it('sends a tab without a stored launch back to the start page', async () => {
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        screen.getByText(/choose your environment again/);
+        fireEvent.click(screen.getByRole('button', { name: 'Start a new session' }));
+        screen.getByText('Choose your programming language');
+        expect(window.location.pathname).toBe('/');
+    });
+
+    it('forgets the launch when the student starts something else', async () => {
+        await launchThenEnd();
+        fireEvent.click(screen.getByRole('button', { name: 'Start something else' }));
+        cleanup();
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        expect(screen.queryByRole('button', { name: 'Resume my session' })).toBeNull();
+    });
+
+    it('offers no resume a day later', async () => {
+        await renderApp('/', WORKSPACE_CONFIG);
+        await selectApp('java-17');
+        cleanup();
+        vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 25 * 60 * 60 * 1000);
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        expect(screen.queryByRole('button', { name: 'Resume my session' })).toBeNull();
+        vi.mocked(Date.now).mockRestore();
+    });
+
+    describe('with the reason from the workspace', () => {
+        const KEYCLOAK_WORKSPACE_CONFIG = { ...KEYCLOAK_CONFIG, useEphemeralStorage: false };
+        const GENERAL = /Sessions close after a period without activity/;
+
+        async function launchThenEndLoggedIn(respond: (workspaceName: string) => Promise<object[]>): Promise<void> {
+            keycloak.idToken = 'id-token';
+            keycloak.idTokenParsed = { email: 'ada@example.org', preferred_username: 'ada' };
+            keycloak.init.mockResolvedValue(true);
+            await renderApp('/', KEYCLOAK_WORKSPACE_CONFIG);
+            await screen.findByText('Choose your programming language');
+            await selectApp('java-17');
+            const workspaceName = launchRequest().workspaceName;
+            theia.Workspace.listWorkspaces.mockImplementation(() => respond(workspaceName));
+            cleanup();
+            await renderApp('/session-ended', KEYCLOAK_WORKSPACE_CONFIG);
+            await screen.findByText(ENDED);
+        }
+
+        it.each([
+            ['inactivity', /closed after a period without activity/],
+            ['lifetime', /reached the maximum time a session may run/]
+        ])('says the session ended for %s', async (reason, text) => {
+            const ended = new Date(Date.now() + 60_000).toISOString();
+            await launchThenEndLoggedIn(async name => [{ name, lastSessionEndReason: reason, lastSessionEndTime: ended }]);
+            await screen.findByText(text);
+            expect(theia.Workspace.listWorkspaces).toHaveBeenCalledWith(
+                expect.objectContaining({ serviceUrl: 'https://service.example', user: 'ada@example.org' }),
+                { accessToken: 'id-token' }
+            );
+        });
+
+        it('keeps the general text when the lookup fails', async () => {
+            await launchThenEndLoggedIn(() => Promise.reject(new Error('down')));
+            await waitFor(() => expect(theia.Workspace.listWorkspaces).toHaveBeenCalled());
+            screen.getByText(GENERAL);
+        });
+
+        it('does not ask without Keycloak', async () => {
+            await launchThenEnd();
+            screen.getByText(GENERAL);
+            expect(theia.Workspace.listWorkspaces).not.toHaveBeenCalled();
+        });
+    });
+
+    it('explains a previous session that is still shutting down', async () => {
+        await launchThenEnd();
+        theia.launchAndRedirect.mockRejectedValue(Object.assign(new Error('limit'), { status: 553 }));
+        fireEvent.click(screen.getByRole('button', { name: 'Resume my session' }));
+        await screen.findByText(/previous session is still shutting down/);
     });
 });
