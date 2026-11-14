@@ -1,0 +1,82 @@
+# Manual release. The only way the landing page releases.
+#
+#   gh workflow run release.yml -R EduIDE/EduIDE-Landing-Page --ref main -f version=1.4.0
+#   gh workflow run release.yml -R EduIDE/EduIDE-Landing-Page --ref my-branch -f version=1.4.0-rc.1
+#
+# Drafts the GitHub Release, pushes ghcr.io/eduide/eduide-landing-page:<version>
+# (no leading v), verifies it and publishes the release, which creates the tag.
+# A release candidate (-rc.N) makes a prerelease.
+#
+# A release created with GITHUB_TOKEN triggers no other workflow, so the image
+# build is called from here instead of being triggered by the release.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without the leading v, e.g. 1.4.0, or 1.4.0-rc.1 for a prerelease"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Draft GitHub Release
+    permissions:
+      contents: write
+    uses: EduIDE/.github/.github/workflows/release.yml@main
+    with:
+      version: ${{ inputs.version }}
+      tag_prefix: "v"
+
+  image:
+    name: Image
+    needs: release
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      image_tag: ${{ inputs.version }}
+    secrets: inherit
+
+  verify:
+    name: Verify
+    needs: [release, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Check the image
+        env:
+          VERSION: ${{ inputs.version }}
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "ghcr.io/eduide/eduide-landing-page:${VERSION}"
+          echo "## Released ${TAG}" >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}" >> "$GITHUB_STEP_SUMMARY"
+
+  # Last: publishing the draft creates the tag. Until here a failed job leaves
+  # a draft and no tag.
+  publish-release:
+    needs: [release, verify]
+    permissions:
+      contents: write
+    uses: EduIDE/.github/.github/workflows/release-publish.yml@main
+    with:
+      tag: ${{ needs.release.outputs.tag }}
