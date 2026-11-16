@@ -7,7 +7,7 @@ Landing page for EduIDE Cloud workspace management, providing a user-friendly in
 - **User Authentication**: Keycloak-based authentication and authorization
 - **Workspace Management**: Launch and manage multiple cloud-based IDEs
 - **Dynamic Configuration**: Runtime configuration via `config.js`
-- **Query Parameters**: Support for various URL parameters (gitUri, gitToken, artemisToken, etc.)
+- **Query Parameters**: Support for various URL parameters (appDef, gitUri, gitUser, gitMail, artemisToken, artemisUrl)
 - **Responsive Design**: Modern UI with dark/light theme support
 
 ## Prerequisites
@@ -111,7 +111,7 @@ window.theiaCloudConfig = {
 | `serviceUrl` | string | Yes | Theia Cloud service URL |
 | `appDefinition` | string | Yes | Application definition identifier |
 | `useKeycloak` | boolean | Yes | Enable Keycloak authentication |
-| `useEphemeralStorage` | boolean | Yes | Use ephemeral storage for workspaces |
+| `useEphemeralStorage` | boolean | Yes | Default persistence of launched sessions: `true` launches ephemeral sessions, `false` workspace-backed ones. An app can override it with `ephemeral` |
 | `keycloakAuthUrl` | string | Conditional | Keycloak auth server URL |
 | `keycloakRealm` | string | Conditional | Keycloak realm name |
 | `keycloakClientId` | string | Conditional | Keycloak client ID |
@@ -127,7 +127,7 @@ window.theiaCloudConfig = {
 | `additionalApps` | array | No | Additional apps to display |
 | `footerLinks` | object | No | Footer link configuration |
 
-Each entry in `additionalApps` may optionally include `image` (or `Image` for compatibility). When omitted, the landing page keeps the current behavior and derives the logo path from `appName`. Apps may also set `visible: false` to stay launchable through direct `appDef` URLs without appearing on the landing page. Visibility defaults to true and does not need to be configured for visible apps. When provided, the landing page uses the image value like this:
+Each entry in `additionalApps` may optionally include `image` (or `Image` for compatibility). When omitted, the landing page keeps the current behavior and derives the logo path from `appName`. Apps may set `ephemeral: true` or `false` to decide whether their sessions discard their files, instead of the installation-wide `useEphemeralStorage`. The effective value is `ephemeral ?? useEphemeralStorage` (only a boolean counts), requires chart 3.0.0 or later to be set by the chart, applies to launches with a build system too, and is shown to users as a "Temporary" or "Saved" badge on the tile and on the launch screen. An app known only through `appDefinition`, without an `additionalApps` entry, follows `useEphemeralStorage`. An ephemeral launch that the service refuses with a 400 (any 400 without a JSON reason counts; with one, it must mention a workspace-backed session) is retried workspace-backed. Apps may also set `visible: false` to stay launchable through direct `appDef` URLs without appearing on the landing page. Visibility defaults to true and does not need to be configured for visible apps. When provided, the landing page uses the image value like this:
 
 - Plain name like `java-17` becomes `/assets/logos/java-17-logo.png`
 - Filename like `java-17-logo.png` becomes `/assets/logos/java-17-logo.png`
@@ -304,7 +304,12 @@ This project uses GitHub Actions for automated Docker builds and multi-architect
 
 - **Push to main**: Builds and pushes to `latest` tag
 - **Pull Request**: Builds image for testing
-- **Manual Dispatch**: Build on demand with version tag
+- **Manual Dispatch**: Build on demand with a custom tag
+- **Release**: `release.yml`, run by hand with a `version` input, drafts the GitHub Release, builds the image as `X.Y.Z`, verifies it and publishes the release, which creates the `vX.Y.Z` tag (see below)
+
+### Releasing
+
+Ask Claude to "release the landing page" (skill `.claude/skills/release`) or do it by hand: open a release pull request that bumps `package.json` (`npm version X.Y.Z --no-git-tag-version`) and moves the `## [Unreleased]` entries of `CHANGELOG.md` under `## [X.Y.Z] - YYYY-MM-DD`, then after the merge run `gh workflow run release.yml -R EduIDE/EduIDE-Landing-Page --ref main -f version=X.Y.Z`. The CHANGELOG section becomes the release notes. An `-rc.N` version can run from any branch and makes a prerelease. Afterwards bump `versions.landingPage` in EduIDE-Helm.
 
 ### Build Platforms
 

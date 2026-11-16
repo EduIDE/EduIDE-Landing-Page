@@ -40,8 +40,8 @@ has module-level state, so `App.test.tsx` re-imports it for every test. An
 `it.fails` marks a known bug: fixing the bug makes that test fail, so turn it into
 a plain `it`.
 
-**CI runs `npm run lint` and `npm test`.** The Docker build's `npm run build`
-covers type errors. `format:check` never runs, so run it yourself.
+**CI runs `npm run lint`, `npm run typecheck` and `npm test`.** `format:check`
+never runs, so run it yourself.
 
 ## How configuration reaches the app
 
@@ -91,16 +91,16 @@ the chart. The chart's field is `label`; it arrives here as `appName`.
 |---|---|
 | `visible` | defaults to shown. Only an explicit `false` hides an app. A hidden app can still be launched by a link with `?appDef=`, `gitUri` and `artemisToken` |
 | `buildSystems` | the picker appears only with **2 or more**. With exactly one it is auto-selected silently |
+| `ephemeral` | optional boolean, effective value `ephemeral ?? useEphemeralStorage` (`isEphemeralLaunch`). Decides the launch and the "Temporary" / "Saved" badge |
 | `image` | resolves to a logo path; absent means it is derived from `appName` |
 
 **Build-system logos derive from the `id`, not the label** — adding a build
 system means adding `public/assets/logos/<id>-logo.png`.
 
 Selecting a build system changes the workspace name, so Maven and Gradle
-variants of one app get separate volumes. And a launch with a build system is
-always workspace-backed, never ephemeral: ephemeral sessions receive their
-environment through the data bridge, which arrives after the entrypoint has
-already run.
+variants of one app get separate volumes when the launch is workspace-backed.
+`TEMPLATE` is sent in the launch env either way; Scorpio applies the template
+after the session starts, so templates no longer force a persistent launch.
 
 The build-system picker is skipped entirely when `gitUri` or `artemisToken` is
 present — the Artemis flow never sets `TEMPLATE`.
@@ -199,4 +199,5 @@ config.
 - Explicit return types on non-expression functions; it is a warning, and
   warnings are fatal.
 - Release tags are `vX.Y.Z`; the image tag is the same string without the `v`.
+- Releases are manual: `release.yml` (`workflow_dispatch`, input `version`) after a release PR that moves the `CHANGELOG.md` entries under `## [X.Y.Z]` (`package.json` is not a version file). Use the `release` skill. A release created by hand triggers nothing.
 - There are no license banners; do not add them.
