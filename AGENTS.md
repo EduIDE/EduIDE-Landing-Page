@@ -13,7 +13,7 @@ src/launch.ts                  workspace naming, launch env, trusted hosts, laun
 src/lastLaunch.ts              what the last launch in this tab used, so /session-ended can resume it
 src/sessionEndReason.ts        picks why the stored launch ended from the workspace list
 src/common-extensions/types.ts the EduIDE-specific config surface
-src/components/                16 presentational components
+src/components/                17 presentational components
 src/sentry.ts                  reads the config a second time, before React mounts
 public/config.js               DEVELOPMENT ONLY - see below
 nginx.conf                     serves config.js uncached; SPA fallback for /imprint, /privacy, /session-ended
