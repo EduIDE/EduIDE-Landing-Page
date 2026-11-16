@@ -527,6 +527,7 @@
 
 .App__launch-persistence,
 .Loading__persistence {
+    color: var(--color-text-primary);
     text-align: center;
     margin: 0 auto 1rem;
 }
