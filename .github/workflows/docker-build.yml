@@ -12,10 +12,14 @@ on:
   schedule:
     - cron: '0 2 * * *'
 
-  release:
-    types:
-      - published
-      - prereleased
+  # Called by release.yml, which passes the version as image_tag.
+  workflow_call:
+    inputs:
+      image_tag:
+        description: "Image tag, e.g. 2.3.0"
+        required: false
+        default: ""
+        type: string
 
   workflow_dispatch:
     inputs:
@@ -45,11 +49,10 @@ jobs:
       docker-file: Dockerfile
       image-name: eduide/eduide-landing-page
       docker-context: .
-      # Deliberately NOT passed on a release. An override is used verbatim by
-      # the shared workflow, which would defeat its `${RELEASE_TAG#v}`
-      # normalisation and publish `v1.2.0` instead of `1.2.0` - a tag no chart
-      # can consume, since appVersion and the image tag must be one string.
-      image-tag: ${{ github.event_name == 'workflow_dispatch' && inputs.image_tag || '' }}
+      # release.yml passes the plain version (no leading v). Called from there the
+      # event is workflow_dispatch on main, so without it the shared workflow
+      # would publish `latest` instead of `1.2.0`.
+      image-tag: ${{ inputs.image_tag || '' }}
       no-cache: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.disable_layer_cache) || false }}
       # Small nginx + Vite build; the disk-reclaim step is not worth the time.
       free-disk-space: false

@@ -304,7 +304,12 @@ This project uses GitHub Actions for automated Docker builds and multi-architect
 
 - **Push to main**: Builds and pushes to `latest` tag
 - **Pull Request**: Builds image for testing
-- **Manual Dispatch**: Build on demand with version tag
+- **Manual Dispatch**: Build on demand with a custom tag
+- **Release**: `release.yml`, run by hand with a `version` input, drafts the GitHub Release, builds the image as `X.Y.Z`, verifies it and publishes the release, which creates the `vX.Y.Z` tag (see below)
+
+### Releasing
+
+Ask Claude to "release the landing page" (skill `.claude/skills/release`) or do it by hand: open a release pull request that bumps `package.json` (`npm version X.Y.Z --no-git-tag-version`) and moves the `## [Unreleased]` entries of `CHANGELOG.md` under `## [X.Y.Z] - YYYY-MM-DD`, then after the merge run `gh workflow run release.yml -R EduIDE/EduIDE-Landing-Page --ref main -f version=X.Y.Z`. The CHANGELOG section becomes the release notes. An `-rc.N` version can run from any branch and makes a prerelease. Afterwards bump `versions.landingPage` in EduIDE-Helm.
 
 ### Build Platforms
 
