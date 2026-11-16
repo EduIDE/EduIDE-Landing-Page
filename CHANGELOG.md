@@ -5,6 +5,10 @@ The section of a version becomes the notes of its GitHub Release.
 
 ## [Unreleased]
 
+### Fixes
+
+- The "Files are lost when the session ends." / "Files are kept between sessions." hint on the launch and progress screens is readable in dark mode again; it used the browser's default black text
+
 ## [1.4.0] - 2026-11-16
 
 ### Features
