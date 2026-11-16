@@ -112,18 +112,24 @@ present — the Artemis flow never sets `TEMPLATE`.
 They become session environment variables (`GIT_REF` and `GIT_SOURCE` for two of them)
 whose names are a contract with the IDE image's entrypoint and Scorpio, not with this repo.
 
-**Every `gitUri` that is not a trusted Artemis link** (`isTrustedArtemisLink`) can come from anywhere,
-so it is checked before anything starts (`src/common-extensions/git-launch.ts`), with or without an
-`artemisToken`: a valid HTTPS URL on a host in `allowedGitHosts` (default `github.com` and `gitlab.com`;
-add Gitea or Forgejo hosts here) or in `trustedArtemisHosts`. Credentials in the URL are refused unless
-the link carries an `artemisToken`, because Artemis links embed the student's VCS token by design.
-A link that fails shows the reason and nothing else, never the credentials.
-A link without an `artemisToken` that names a valid `appDef` gets a confirmation button
-("Open owner/repo in Java 17") instead of the picker, and never starts by itself.
+A link with a `gitUri` is either a trusted Artemis link (`isTrustedArtemisLink`: the hosts of both `gitUri`
+and `artemisUrl` are in `trustedArtemisHosts`) or an external one. Anyone can write an external link, so it is
+checked before anything starts (`src/common-extensions/git-launch.ts`), whatever else it carries: a valid HTTPS
+URL on a host in `allowedGitHosts` (default `github.com` and `gitlab.com`; add Gitea or Forgejo hosts here) or
+in `trustedArtemisHosts`, and no credentials in it. A link that fails shows the reason and nothing else, never
+the credentials. An external link passes on only `GIT_URI` (the parsed `url.href`, because plain git can read
+a raw string such as `https://github.com\@evil.example/x.git` differently) and `GIT_REF`; `artemisUrl`,
+`artemisToken`, `gitUser` and `gitMail` are dropped, also on Resume, and a stored external link is checked
+again on Resume. One that names a valid `appDef` gets a confirmation button ("Open owner/repo in Java 17")
+instead of the picker, and never starts by itself.
+
+The check compares the host with its port, `isTrustedArtemisLink` compares the hostname without it. A port
+therefore can only make a link fail, never pass.
 
 `GIT_SOURCE` is derived here and never read from the link: `artemis` for a trusted Artemis link,
 `external` for any other `gitUri`, unset without one. `gitRef` becomes `GIT_REF` after
-`sanitizeGitRef`, and `src/lastLaunch.ts` keeps it so Resume clones the same ref.
+`sanitizeGitRef`, `src/lastLaunch.ts` keeps it so Resume clones the same ref, and a set ref is part of the
+workspace name, so each ref gets its own volume.
 
 An Artemis `gitUri` is cloned verbatim and carries the student's VCS token.
 **Treat it as secret-bearing.** `nginx.conf` logs paths without the query for
