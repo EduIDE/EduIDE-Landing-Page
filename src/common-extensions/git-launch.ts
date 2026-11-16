@@ -11,20 +11,16 @@ export const DEFAULT_ALLOWED_GIT_HOSTS = ['github.com', 'gitlab.com'];
 /**
  * Why a git link that is not a trusted Artemis link must not be launched, or undefined if it may be. Such a link can
  * come from anywhere on the internet, so EduIDE only clones from known hosts (`allowedHosts` and the Artemis hosts in
- * `trustedHosts`) over HTTPS. Credentials in the URL are refused unless the link carries an Artemis token, because
- * Artemis links embed the student's VCS token by design.
+ * `trustedHosts`) over HTTPS, and never accepts credentials in it.
  */
-export function checkGitLaunchUri(
-    gitUri: string,
-    options: { allowedHosts?: string[]; trustedHosts?: string[]; hasArtemisToken?: boolean } = {}
-): string | undefined {
+export function checkGitLaunchUri(gitUri: string, options: { allowedHosts?: string[]; trustedHosts?: string[] } = {}): string | undefined {
     let url: URL;
     try {
         url = new URL(gitUri);
     } catch {
         return 'The repository link is not a valid URL.';
     }
-    if ((url.username || url.password) && !options.hasArtemisToken) {
+    if (url.username || url.password) {
         return 'Repository links must not contain credentials. Open the repository without them; EduIDE asks you to sign in when needed.';
     }
     if (url.protocol !== 'https:') {

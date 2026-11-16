@@ -44,7 +44,8 @@ export function createWorkspaceName(
     appDefinition: string,
     buildSystemId: string | undefined,
     workspaceUser: string | undefined,
-    gitUri: string | undefined
+    gitUri: string | undefined,
+    gitRef?: string
 ): string {
     // Fold the selected build system (template) into the workspace identity so
     // that, e.g., the Bazel and Make variants of the same app definition get
@@ -57,12 +58,14 @@ export function createWorkspaceName(
         return `ws-${appSegment}-playground-${userSegment}-${createDeterministicId(`${workspaceUser}-${appKey}-playground`)}`;
     }
 
+    // Only a set ref joins the key, so existing workspace names stay the same.
+    const gitKey = gitRef ? `${gitUri}#${gitRef}` : gitUri;
     const repoName = gitUri
         .split('/')
         .pop()
         ?.replace(/\.git$/, '');
     const repoSegment = sanitizeWorkspaceSegment(repoName, 'repo');
-    return `ws-${appSegment}-${repoSegment}-${userSegment}-${createDeterministicId(`${workspaceUser}-${appKey}-${gitUri}`)}`;
+    return `ws-${appSegment}-${repoSegment}-${userSegment}-${createDeterministicId(`${workspaceUser}-${appKey}-${gitKey}`)}`;
 }
 
 export function createLaunchEnv(link: {

@@ -395,17 +395,44 @@ describe('URL parameters', () => {
         expect(launchRequest().env.fromMap.GIT_SOURCE).toBeUndefined();
     });
 
-    it.each([
-        ['the repository host is not trusted', { gitUri: 'https://github.com/o/r.git', artemisUrl: TRUSTED_URL }],
-        ['the Artemis host is not trusted', { gitUri: GIT_URI, artemisUrl: 'https://evil.example' }],
-        ['the link has no Artemis URL', { gitUri: GIT_URI }]
-    ])('waits for a click when %s', async (_, params) => {
-        await renderApp(query({ appDef: 'java-17', artemisToken: 'token', ...params }));
-        const launch = screen.getByRole('button', { name: /Launch Java 17/ });
+    it('treats a link as external when its Artemis host is not trusted, and drops the Artemis parameters', async () => {
+        await renderApp(
+            query({
+                appDef: 'java-17',
+                gitUri: PUBLIC_GIT_URI,
+                artemisUrl: 'https://evil.example',
+                artemisToken: 'token',
+                gitUser: 'root',
+                gitMail: 'root@example.org',
+                gitRef: 'main'
+            })
+        );
         screen.getByText(/This link opens a repository from/);
         expect(theia.ping).not.toHaveBeenCalled();
-        fireEvent.click(launch);
+        fireEvent.click(screen.getByRole('button', { name: /Open org\/my-repo in Java 17/ }));
         await launchCount(1);
+        expect(launchRequest().env.fromMap).toEqual({
+            THEIA: 'true',
+            GIT_URI: PUBLIC_GIT_URI,
+            GIT_REF: 'main',
+            GIT_SOURCE: 'external'
+        });
+    });
+
+    it.each([
+        ['the Artemis host is not trusted', { artemisUrl: 'https://evil.example' }],
+        ['the link has no Artemis URL', {}]
+    ])('refuses credentials in the link when %s', async (_, params) => {
+        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', ...params }));
+        screen.getByText(/must not contain credentials/);
+        expect(screen.queryByRole('button', { name: /Open|Launch/ })).toBeNull();
+    });
+
+    it('sends the parsed form of the link, so a backslash cannot name another host', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: 'https://github.com\\@evil.example/x.git' }));
+        fireEvent.click(screen.getByRole('button', { name: /Open .* in Java 17/ }));
+        await launchCount(1);
+        expect(launchRequest().env.fromMap.GIT_URI).toBe('https://github.com/@evil.example/x.git');
     });
 
     it('offers launching again after a failed auto-launch', async () => {
@@ -651,9 +678,25 @@ describe('workspace naming', () => {
         expect(await workspaceFor(url('Ada'), PERSISTENT)).toMatch(/^ws-java-17-playground-ada-[0-9a-f]{8}$/);
     });
 
+    it('gives each gitRef its own workspace', async () => {
+        const link = (gitRef: string): string => query({ user: 'ada', appDef: 'java-17', gitUri: PUBLIC_GIT_URI, gitRef });
+        const open = async (gitRef: string): Promise<string> => {
+            theia.launch.mockClear();
+            await confirmUser(link(gitRef), PERSISTENT);
+            fireEvent.click(screen.getByRole('button', { name: /Open org\/my-repo in Java 17/ }));
+            await launchCount(1);
+            const { workspaceName } = launchRequest();
+            cleanup();
+            return workspaceName;
+        };
+        expect(await open('main')).not.toBe(await open('solution'));
+    });
+
     it('builds a repository name from app, repository and user, without credentials', async () => {
-        await confirmUser(query({ user: 'ada', appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token' }), PERSISTENT);
-        fireEvent.click(screen.getByRole('button', { name: /Launch Java 17/ }));
+        await confirmUser(
+            query({ user: 'ada', appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }),
+            PERSISTENT
+        );
         await launchCount(1);
         const name = launchRequest().workspaceName;
         expect(name).toMatch(/^ws-java-17-my-repo-ada-[0-9a-f]{8}$/);
@@ -957,6 +1000,18 @@ describe('session ended', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Resume my session' }));
         await launchCount(2);
         expect(launchRequest(1).env.fromMap).toMatchObject({ GIT_REF: 'v1.2', GIT_SOURCE: 'external' });
+    });
+
+    it('checks a stored external link again, so a removed host stops working', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: 'https://github.com/o/r.git' }), WORKSPACE_CONFIG);
+        fireEvent.click(screen.getByRole('button', { name: /Open o\/r in Java 17/ }));
+        await launchCount(1);
+        cleanup();
+
+        await renderApp('/session-ended', { ...WORKSPACE_CONFIG, allowedGitHosts: ['gitea.example'] });
+        fireEvent.click(screen.getByRole('button', { name: 'Resume my session' }));
+        await screen.findByText(/github\.com cannot be opened/);
+        expect(theia.launch).toHaveBeenCalledTimes(1);
     });
 
     it('waits for a click, even with a trusted link in the URL', async () => {

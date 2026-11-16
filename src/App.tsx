@@ -173,33 +173,28 @@ function App(): React.JSX.Element {
             }
         }
 
-        // Get gitUri parameter from URL.
-        if (urlParams.has('gitUri')) {
-            const gitUriParam = urlParams.get('gitUri');
-            if (gitUriParam) {
-                setGitUri(gitUriParam);
-            }
-        }
-
         setGitRef(sanitizeGitRef(urlParams.get('gitRef') ?? undefined));
 
-        // Anyone can write a git link, so every one that is not a trusted Artemis link is checked before anything starts.
+        // A link is either a trusted Artemis link or an external one. Anyone can write an external link, so it is checked
+        // before anything starts and passes on only gitUri and gitRef, never an Artemis URL, token or identity.
         const linkGitUri = urlParams.get('gitUri');
-        const linkArtemisUrl = urlParams.get('artemisUrl') ?? undefined;
-        if (linkGitUri && !isTrustedArtemisLink(linkGitUri, linkArtemisUrl, config.trustedArtemisHosts)) {
-            const problem = checkGitLaunchUri(linkGitUri, {
-                allowedHosts: config.allowedGitHosts,
-                trustedHosts: config.trustedArtemisHosts,
-                hasArtemisToken: !!urlParams.get('artemisToken')
-            });
+        const external =
+            !!linkGitUri && gitSourceOf(linkGitUri, urlParams.get('artemisUrl') ?? undefined, config.trustedArtemisHosts) === 'external';
+        if (linkGitUri) {
+            const problem = external
+                ? checkGitLaunchUri(linkGitUri, { allowedHosts: config.allowedGitHosts, trustedHosts: config.trustedArtemisHosts })
+                : undefined;
             if (problem) {
                 setError(problem);
                 setLaunchBlocked(true);
+            } else {
+                // The parsed form is what the check saw, so it is also what the session clones.
+                setGitUri(external ? new URL(linkGitUri).href : linkGitUri);
             }
         }
 
         // Get artemisToken parameter from URL.
-        if (urlParams.has('artemisToken')) {
+        if (!external && urlParams.has('artemisToken')) {
             const artemisTokenParam = urlParams.get('artemisToken');
             if (artemisTokenParam) {
                 setArtemisToken(artemisTokenParam);
@@ -207,7 +202,7 @@ function App(): React.JSX.Element {
         }
 
         // Get artemisUrl parameter from URL.
-        if (urlParams.has('artemisUrl')) {
+        if (!external && urlParams.has('artemisUrl')) {
             const artemisUrlParam = urlParams.get('artemisUrl');
             if (artemisUrlParam) {
                 setArtemisUrl(artemisUrlParam);
@@ -215,7 +210,7 @@ function App(): React.JSX.Element {
         }
 
         // Get gitUser parameter from URL.
-        if (urlParams.has('gitUser')) {
+        if (!external && urlParams.has('gitUser')) {
             const gitUserParam = urlParams.get('gitUser');
             if (gitUserParam) {
                 setGitUser(gitUserParam);
@@ -223,7 +218,7 @@ function App(): React.JSX.Element {
         }
 
         // Get gitMail parameter from URL.
-        if (urlParams.has('gitMail')) {
+        if (!external && urlParams.has('gitMail')) {
             const gitMailParam = urlParams.get('gitMail');
             if (gitMailParam) {
                 setGitMail(gitMailParam);
@@ -292,7 +287,17 @@ function App(): React.JSX.Element {
         // Resume passes the stored inputs as `replay`. Setting them as state first would not reach
         // this callback before it runs, and the workspace name would come out different.
         (appDefinition: string, buildSystemId?: string, replay?: LaunchInputs): void => {
-            const inputs: LaunchInputs = replay ?? { gitUri, gitRef, gitUser, gitMail, artemisUrl, artemisToken, anonymousUser: user };
+            const link: LaunchInputs = replay ?? { gitUri, gitRef, gitUser, gitMail, artemisUrl, artemisToken, anonymousUser: user };
+            // An external link passes on only gitUri and gitRef, and a stored one is checked again, so a removed host stops working.
+            const external = gitSourceOf(link.gitUri, link.artemisUrl, config.trustedArtemisHosts) === 'external';
+            const problem = external
+                ? checkGitLaunchUri(link.gitUri!, { allowedHosts: config.allowedGitHosts, trustedHosts: config.trustedArtemisHosts })
+                : undefined;
+            if (problem) {
+                setError(problem);
+                return;
+            }
+            const inputs: LaunchInputs = external ? { gitUri: link.gitUri, gitRef: link.gitRef, anonymousUser: link.anonymousUser } : link;
             const app = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appDefinition);
             const tryEphemeral = isEphemeralLaunch(app, config.useEphemeralStorage);
             setLaunchEphemeral(tryEphemeral);
@@ -304,7 +309,7 @@ function App(): React.JSX.Element {
                     .then(() => {
                         // ping successful continue with launch
                         const workspaceUser = config.useKeycloak ? username : inputs.anonymousUser;
-                        const workspace = createWorkspaceName(appDefinition, buildSystemId, workspaceUser, inputs.gitUri);
+                        const workspace = createWorkspaceName(appDefinition, buildSystemId, workspaceUser, inputs.gitUri, inputs.gitRef);
 
                         const requestOptions: RequestOptions = {
                             timeout: LAUNCH_REQUEST_TIMEOUT,
@@ -462,7 +467,7 @@ function App(): React.JSX.Element {
         if (!config?.useKeycloak || !username || !keycloakClient || !launch || launch.ephemeral) {
             return;
         }
-        const workspace = createWorkspaceName(launch.appDefinition, launch.buildSystemId, username, launch.gitUri);
+        const workspace = createWorkspaceName(launch.appDefinition, launch.buildSystemId, username, launch.gitUri, launch.gitRef);
         const client = keycloakClient;
         client
             .updateToken(30)
@@ -641,6 +646,7 @@ function App(): React.JSX.Element {
                                         <LaunchApp
                                             appName={selectedAppName}
                                             appDefinition={selectedAppDefinition}
+                                            gitUri={gitUri}
                                             ephemeral={isEphemeralLaunch(
                                                 config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === selectedAppDefinition),
                                                 config.useEphemeralStorage

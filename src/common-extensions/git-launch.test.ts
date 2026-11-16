@@ -18,10 +18,13 @@ describe('checkGitLaunchUri', () => {
         expect(checkGitLaunchUri('https://git.example:3000/o/r.git', { allowedHosts: ['git.example'] })).toMatch(/cannot be opened/);
     });
 
-    it('allows credentials only with an Artemis token, and never echoes them', () => {
-        const uri = 'https://user:SECRET@github.com/o/r.git';
-        expect(checkGitLaunchUri(uri, { hasArtemisToken: true })).toBeUndefined();
-        expect(checkGitLaunchUri('https://user:SECRET@evil.example/o/r.git', { hasArtemisToken: true })).not.toContain('SECRET');
+    it('never echoes credentials', () => {
+        expect(checkGitLaunchUri('https://user:SECRET@evil.example/o/r.git')).not.toContain('SECRET');
+    });
+
+    it('accepts a backslash link, which the URL parser reads as a path', () => {
+        expect(checkGitLaunchUri('https://github.com\\@evil.example/x.git')).toBeUndefined();
+        expect(new URL('https://github.com\\@evil.example/x.git').href).toBe('https://github.com/@evil.example/x.git');
     });
 
     it.each([
