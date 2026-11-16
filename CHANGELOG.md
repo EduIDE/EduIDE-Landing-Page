@@ -5,6 +5,14 @@ The section of a version becomes the notes of its GitHub Release.
 
 ## [Unreleased]
 
+### Features
+
+- Open a GitHub, GitLab or Gitea/Forgejo repository from a link: `/?appDef=<app>&gitUri=https://<host>/<path>.git&gitRef=<ref>`. The page asks for one click naming the repository, passes `GIT_REF`, and sets `GIT_SOURCE` itself (`artemis` or `external`) ([#50](https://github.com/EduIDE/EduIDE-Landing-Page/pull/50))
+
+### Upgrade notes
+
+- Every `gitUri` that is not a trusted Artemis link is now checked, also when it carries an `artemisToken`: HTTPS only, and the host must be in `allowedGitHosts` (default `github.com`, `gitlab.com`) or `trustedArtemisHosts`. Installations whose Artemis links come from hosts in neither list now get refused. Add them to `trustedArtemisHosts` (or `allowedGitHosts`) in the chart.
+
 ## [1.4.1] - 2026-11-16
 
 ### Fixes
