@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkGitLaunchUri, repositoryName, sanitizeGitRef, sanitizeGitSource, sessionEnvFromConfig } from './git-launch';
+import { checkGitLaunchUri, gitSourceOf, repositoryName, sanitizeGitRef } from './git-launch';
 
 describe('checkGitLaunchUri', () => {
     it('accepts an HTTPS link to an allowed host', () => {
         expect(checkGitLaunchUri('https://github.com/org/repo.git')).toBeUndefined();
-        expect(checkGitLaunchUri('https://git.example/org/repo', [' Git.Example '])).toBeUndefined();
+        expect(checkGitLaunchUri('https://git.example/org/repo', { allowedHosts: [' Git.Example '] })).toBeUndefined();
+    });
+
+    it('accepts GitLab by default and an Artemis host from trustedHosts', () => {
+        expect(checkGitLaunchUri('https://gitlab.com/group/sub/repo.git')).toBeUndefined();
+        expect(checkGitLaunchUri('https://artemis.example/o/r.git', { trustedHosts: ['artemis.example'] })).toBeUndefined();
+    });
+
+    it('counts a port as part of the host only when the list has it', () => {
+        expect(checkGitLaunchUri('https://git.example:3000/o/r.git', { allowedHosts: ['git.example:3000'] })).toBeUndefined();
+        expect(checkGitLaunchUri('https://git.example:3000/o/r.git', { allowedHosts: ['git.example'] })).toMatch(/cannot be opened/);
+    });
+
+    it('allows credentials only with an Artemis token, and never echoes them', () => {
+        const uri = 'https://user:SECRET@github.com/o/r.git';
+        expect(checkGitLaunchUri(uri, { hasArtemisToken: true })).toBeUndefined();
+        expect(checkGitLaunchUri('https://user:SECRET@evil.example/o/r.git', { hasArtemisToken: true })).not.toContain('SECRET');
     });
 
     it.each([
@@ -21,8 +37,8 @@ describe('checkGitLaunchUri', () => {
         expect(checkGitLaunchUri(uri)).toMatch(reason);
     });
 
-    it('allows only github.com by default', () => {
-        expect(checkGitLaunchUri('https://gitlab.com/org/repo.git')).toMatch(/cannot be opened/);
+    it('allows only the configured hosts', () => {
+        expect(checkGitLaunchUri('https://gitlab.com/org/repo.git', { allowedHosts: ['github.com'] })).toMatch(/cannot be opened/);
     });
 });
 
@@ -30,7 +46,7 @@ describe('repositoryName', () => {
     it.each([
         ['https://github.com/org/repo.git', 'org/repo'],
         ['https://github.com/org/repo/', 'org/repo'],
-        ['https://github.com/org/repo/tree/main', 'org/repo']
+        ['https://gitlab.com/group/sub/repo.git', 'group/sub/repo']
     ])('names %s as %s', (uri, name) => {
         expect(repositoryName(uri)).toBe(name);
     });
@@ -57,29 +73,21 @@ describe('sanitizeGitRef', () => {
     );
 });
 
-describe('sanitizeGitSource', () => {
+describe('gitSourceOf', () => {
+    const trusted = ['git.example'];
+
+    it('is artemis for a trusted Artemis link', () => {
+        expect(gitSourceOf('https://git.example/o/r.git', 'https://git.example', trusted)).toBe('artemis');
+    });
+
     it.each([
-        ['artemis', 'artemis'],
-        ['GitHub', 'github'],
-        [' other ', 'other']
-    ])('maps %j to %s', (source, expected) => {
-        expect(sanitizeGitSource(source)).toBe(expected);
+        ['an untrusted repository host', 'https://github.com/o/r.git', 'https://git.example'],
+        ['no Artemis URL', 'https://git.example/o/r.git', undefined]
+    ])('is external for %s', (_, gitUri, artemisUrl) => {
+        expect(gitSourceOf(gitUri, artemisUrl, trusted)).toBe('external');
     });
 
-    it.each([undefined, '', 'gitlab'])('drops %j', source => {
-        expect(sanitizeGitSource(source)).toBeUndefined();
-    });
-});
-
-describe('sessionEnvFromConfig', () => {
-    it('keeps string values with environment variable names', () => {
-        expect(sessionEnvFromConfig({ SCORPIO_GITHUB_CLIENT_ID: 'id', lower: 'x', 'BAD-NAME': 'x', NUMBER: 1, _OK: 'y' })).toEqual({
-            SCORPIO_GITHUB_CLIENT_ID: 'id',
-            _OK: 'y'
-        });
-    });
-
-    it.each([undefined, 'text', 42])('is empty for %j', value => {
-        expect(sessionEnvFromConfig(value)).toEqual({});
+    it('is unset without a gitUri', () => {
+        expect(gitSourceOf(undefined, 'https://git.example', trusted)).toBeUndefined();
     });
 });

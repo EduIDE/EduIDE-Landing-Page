@@ -1,3 +1,12 @@
+// The app's own setting wins over the installation-wide default. Anything but a boolean (a chart could emit a string) is ignored.
+export function isEphemeralLaunch(app: { ephemeral?: unknown } | undefined, useEphemeralStorage: boolean): boolean {
+    return typeof app?.ephemeral === 'boolean' ? app.ephemeral : useEphemeralStorage;
+}
+
+export function persistenceHint(ephemeral: boolean): string {
+    return ephemeral ? 'Files are lost when the session ends.' : 'Files are kept between sessions.';
+}
+
 const WORKSPACE_SEGMENT_LIMIT = 12;
 const LAUNCH_RETRIES = 4;
 const GATEWAY_ERRORS = [502, 503, 504];
@@ -65,10 +74,8 @@ export function createLaunchEnv(link: {
     gitUser?: string;
     gitMail?: string;
     buildSystemId?: string;
-    sessionEnv?: Record<string, string>;
 }): Record<string, string> {
-    // Installation-wide variables first, so a launch's own values win.
-    const env: Record<string, string> = { ...link.sessionEnv, THEIA: 'true' };
+    const env: Record<string, string> = { THEIA: 'true' };
     if (link.artemisToken) {
         env.ARTEMIS_TOKEN = link.artemisToken;
     }
@@ -134,4 +141,19 @@ export async function launchWithRetry<T>(
             await wait();
         }
     }
+}
+
+// The service can answer 200 without a URL when a session vanished mid-launch. Treat that like a 503,
+// so launchWithRetry asks again instead of the browser being sent to "https://".
+export async function requireSessionUrl(url: Promise<string>): Promise<string> {
+    const resolved = await url;
+    if (!resolved) {
+        throw Object.assign(new Error('The session is still starting.'), { status: 503 });
+    }
+    return resolved;
+}
+
+export function redirectToSession(url: string): void {
+    console.log(`Redirect to: https://${url}`);
+    location.replace(`https://${url}`);
 }

@@ -10,12 +10,14 @@ React SPA served by nginx.
 ```
 src/App.tsx                    most of the application: config, URL parsing, Keycloak, launch
 src/launch.ts                  workspace naming, launch env, trusted hosts, launch retries
-src/common-extensions/git-launch.ts  checks for git links without an Artemis token
+src/common-extensions/git-launch.ts  checks for git links that are not trusted Artemis links, GIT_SOURCE
+src/lastLaunch.ts              what the last launch in this tab used, so /session-ended can resume it
+src/sessionEndReason.ts        picks why the stored launch ended from the workspace list
 src/common-extensions/types.ts the EduIDE-specific config surface
-src/components/                15 presentational components
+src/components/                17 presentational components
 src/sentry.ts                  reads the config a second time, before React mounts
 public/config.js               DEVELOPMENT ONLY - see below
-nginx.conf                     serves config.js uncached; SPA fallback for /imprint, /privacy
+nginx.conf                     serves config.js uncached; SPA fallback for /imprint, /privacy, /session-ended
 ```
 
 Most logic is in `App.tsx`. The rules that are easiest to get wrong are plain
@@ -39,8 +41,8 @@ has module-level state, so `App.test.tsx` re-imports it for every test. An
 `it.fails` marks a known bug: fixing the bug makes that test fail, so turn it into
 a plain `it`.
 
-**CI runs `npm run lint` and `npm test`.** The Docker build's `npm run build`
-covers type errors. `format:check` never runs, so run it yourself.
+**CI runs `npm run lint`, `npm run typecheck` and `npm test`.** `format:check`
+never runs, so run it yourself.
 
 ## How configuration reaches the app
 
@@ -90,39 +92,38 @@ the chart. The chart's field is `label`; it arrives here as `appName`.
 |---|---|
 | `visible` | defaults to shown. Only an explicit `false` hides an app. A hidden app can still be launched by a link with `?appDef=`, `gitUri` and `artemisToken` |
 | `buildSystems` | the picker appears only with **2 or more**. With exactly one it is auto-selected silently |
+| `ephemeral` | optional boolean, effective value `ephemeral ?? useEphemeralStorage` (`isEphemeralLaunch`). Decides the launch and the "Temporary" / "Saved" badge |
 | `image` | resolves to a logo path; absent means it is derived from `appName` |
 
 **Build-system logos derive from the `id`, not the label** — adding a build
 system means adding `public/assets/logos/<id>-logo.png`.
 
 Selecting a build system changes the workspace name, so Maven and Gradle
-variants of one app get separate volumes. And a launch with a build system is
-always workspace-backed, never ephemeral: ephemeral sessions receive their
-environment through the data bridge, which arrives after the entrypoint has
-already run.
+variants of one app get separate volumes when the launch is workspace-backed.
+`TEMPLATE` is sent in the launch env either way; Scorpio applies the template
+after the session starts, so templates no longer force a persistent launch.
 
 The build-system picker is skipped entirely when `gitUri` or `artemisToken` is
 present — the Artemis flow never sets `TEMPLATE`.
 
 ## URL parameters are a second config channel
 
-`appDef`, `gitUri`, `gitRef`, `source`, `gitUser`, `gitMail`, `artemisUrl`,
-`artemisToken`, `user`. They become session environment variables (`GIT_REF`
-and `GIT_SOURCE` for the two git ones) whose names are a contract with the IDE
-image's entrypoint and Scorpio, not with this repo.
+`appDef`, `gitUri`, `gitRef`, `gitUser`, `gitMail`, `artemisUrl`, `artemisToken`, `user`.
+They become session environment variables (`GIT_REF` and `GIT_SOURCE` for two of them)
+whose names are a contract with the IDE image's entrypoint and Scorpio, not with this repo.
 
-**A `gitUri` without an `artemisToken`** (the "Open in EduIDE" browser
-extension) can come from anywhere, so it is checked before anything starts
-(`src/common-extensions/git-launch.ts`): HTTPS only, no credentials in the URL,
-and only hosts in `allowedGitHosts` (default `github.com`). A link that fails
-shows the reason and nothing else. One that names a valid `appDef` gets a
-confirmation button ("Open owner/repo in Java 17") instead of the picker, and
-never starts by itself.
+**Every `gitUri` that is not a trusted Artemis link** (`isTrustedArtemisLink`) can come from anywhere,
+so it is checked before anything starts (`src/common-extensions/git-launch.ts`), with or without an
+`artemisToken`: a valid HTTPS URL on a host in `allowedGitHosts` (default `github.com` and `gitlab.com`;
+add Gitea or Forgejo hosts here) or in `trustedArtemisHosts`. Credentials in the URL are refused unless
+the link carries an `artemisToken`, because Artemis links embed the student's VCS token by design.
+A link that fails shows the reason and nothing else, never the credentials.
+A link without an `artemisToken` that names a valid `appDef` gets a confirmation button
+("Open owner/repo in Java 17") instead of the picker, and never starts by itself.
 
-`sessionEnv` (config) is merged into every launch's environment first, so a
-launch's own variables win. It carries per-installation settings such as
-Scorpio's `SCORPIO_GITHUB_CLIENT_ID`; only string values with
-environment-variable names are passed on.
+`GIT_SOURCE` is derived here and never read from the link: `artemis` for a trusted Artemis link,
+`external` for any other `gitUri`, unset without one. `gitRef` becomes `GIT_REF` after
+`sanitizeGitRef`, and `src/lastLaunch.ts` keeps it so Resume clones the same ref.
 
 An Artemis `gitUri` is cloned verbatim and carries the student's VCS token.
 **Treat it as secret-bearing.** `nginx.conf` logs paths without the query for
@@ -133,6 +134,32 @@ credentials in the link; Scorpio signs the student in inside the session.
 `gitUri` and `artemisToken` shows a Launch button, and only starts by itself when
 the hosts of both `gitUri` and `artemisUrl` are in `trustedArtemisHosts`.
 
+## /session-ended
+
+EduIDE-Helm redirects any request for a session that no longer exists to
+`/session-ended` (the catch-all rule on the instances HTTPRoute). The page says
+the session ended and offers **Resume**, which launches again with the inputs
+stored by `src/lastLaunch.ts`. Those inputs produce the same workspace name, so
+the same volume is mounted again.
+
+- The inputs live in **sessionStorage, not localStorage**: `gitUri` and
+  `artemisToken` are secret-bearing, and they only have to survive the redirect
+  back in the same tab. They expire after 24 hours.
+- Resume always takes a click. Starting by itself would bring back exactly the
+  idle sessions the inactivity timeout removes, so the auto-start effect skips
+  this page.
+- Resume hands the inputs straight to `handleStartSession`. Setting them as state
+  first does not reach the callback in time, and the workspace name comes out
+  different: an empty workspace instead of the student's.
+- An ephemeral session has no volume, so the page offers only a fresh start.
+- The gateway redirect carries no reason, so the page asks EduIDE-Cloud. The
+  operator annotates the workspace when it stops a session, and the workspace
+  list returns `lastSessionEndReason` (`inactivity` or `lifetime`) and
+  `lastSessionEndTime`. `src/sessionEndReason.ts` uses a reason only for the
+  workspace the stored launch names and only if it is newer than that launch.
+  This needs Keycloak (the list refuses anonymous callers) and a persistent
+  workspace; otherwise, or if the call fails, the page keeps the general text.
+
 ## Auth
 
 Keycloak via `keycloak-js`, pinned exactly. Silent `check-sso` on load, then
@@ -142,6 +169,11 @@ interactive login on demand.
 included, deliberately** — that is what carries `gitUri` and `artemisToken`
 through the Keycloak round trip. There is a commit that exists solely to fix
 this. Do not simplify it to `window.location.origin`.
+
+It drops the fragment, though. After a login Keycloak returns with
+`#state=...&code=...`, and keycloak-js reuses the init `redirectUri` as the
+logout `post_logout_redirect_uri`. Keycloak rejects any redirect URI with a
+fragment ("Invalid redirect uri"), whatever the client's wildcards say.
 
 With `useKeycloak: false` the app invents `anonymous-<random>` as the user and
 suppresses the whole Keycloak UI. That is the default in the checked-in dev
@@ -162,6 +194,8 @@ config.
 - **Launch requests retry only on 502, 503, 504 and timeouts**, in `launchWithRetry`.
   The gateway cuts requests off after 60s (`gateway.serviceRouteRequestTimeout`)
   while a slow session keeps starting, so a later request picks it up.
+  A 200 without a session URL counts as a 503 (`requireSessionUrl`), so the page never
+  redirects to an empty host. Launches go through `TheiaCloud.launch`, not `launchAndRedirect`.
 - The image runs nginx without root on **port 8080**, with a read-only filesystem
   in the chart. Only `/tmp` is writable.
 - The footer version comes from the chart, which defaults it to the landing
@@ -180,4 +214,5 @@ config.
 - Explicit return types on non-expression functions; it is a warning, and
   warnings are fatal.
 - Release tags are `vX.Y.Z`; the image tag is the same string without the `v`.
+- Releases are manual: `release.yml` (`workflow_dispatch`, input `version`) after a release PR that moves the `CHANGELOG.md` entries under `## [X.Y.Z]` (`package.json` is not a version file). Use the `release` skill. A release created by hand triggers nothing.
 - There are no license banners; do not add them.

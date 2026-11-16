@@ -4,14 +4,7 @@ import { getTheiaCloudConfig, LaunchRequest, PingRequest, RequestOptions, TheiaC
 import Keycloak, { KeycloakConfig } from 'keycloak-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import {
-    checkGitLaunchUri,
-    DEFAULT_ALLOWED_GIT_HOSTS,
-    repositoryName,
-    sanitizeGitRef,
-    sanitizeGitSource,
-    sessionEnvFromConfig
-} from './common-extensions/git-launch';
+import { checkGitLaunchUri, gitSourceOf, repositoryName, sanitizeGitRef } from './common-extensions/git-launch';
 import type { ExtendedAppDefinition, ExtendedTheiaCloudConfig } from './common-extensions/types';
 import { getServiceAuthToken } from './common-extensions/types';
 import { AppLogo } from './components/AppLogo';
@@ -27,7 +20,21 @@ import { LoginButton } from './components/LoginButton';
 import { Privacy } from './components/Privacy';
 import { SelectApp } from './components/SelectApp';
 import { SelectBuildSystem } from './components/SelectBuildSystem';
-import { createAnonymousUser, createLaunchEnv, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
+import { SessionEnded } from './components/SessionEnded';
+import type { LastLaunch, LaunchInputs } from './lastLaunch';
+import { clearLastLaunch, readLastLaunch, saveLastLaunch } from './lastLaunch';
+import {
+    createAnonymousUser,
+    createLaunchEnv,
+    createWorkspaceName,
+    isEphemeralLaunch,
+    isTrustedArtemisLink,
+    launchWithRetry,
+    redirectToSession,
+    requireSessionUrl
+} from './launch';
+import type { SessionEndReason } from './sessionEndReason';
+import { findSessionEndReason } from './sessionEndReason';
 
 // global state to be kept between render calls
 let initialized = false;
@@ -39,31 +46,34 @@ let keycloakClient: Keycloak | undefined = undefined;
 // Matches the gateway's request timeout (gateway.serviceRouteRequestTimeout in the chart).
 const LAUNCH_REQUEST_TIMEOUT = 60000;
 
+// Drop the fragment: after login it holds Keycloak's state/code, and Keycloak rejects any redirect URI with a fragment (breaks logout).
 function getCurrentRedirectUri(): string {
-    return window.location.href;
+    return window.location.href.split('#')[0];
+}
+
+type Page = 'home' | 'imprint' | 'privacy' | 'sessionEnded';
+
+function pageFromPath(pathname: string): Page {
+    const path = pathname.replace(/\/+$/, '');
+    if (path === '/imprint') {
+        return 'imprint';
+    }
+    if (path === '/privacy') {
+        return 'privacy';
+    }
+    return path === '/session-ended' ? 'sessionEnded' : 'home';
 }
 
 function App(): React.JSX.Element {
     const [config] = useState<ExtendedTheiaCloudConfig | undefined>(() => getTheiaCloudConfig());
     const [error, setError] = useState<string>();
     const [loading, setLoading] = useState(false);
-    const [currentPage, setCurrentPage] = useState<'home' | 'imprint' | 'privacy'>('home');
+    // Read synchronously, so the auto-start effect already knows on its first run that this is /session-ended.
+    const [currentPage, setCurrentPage] = useState<Page>(() => pageFromPath(window.location.pathname));
 
     // Handle URL routing
     useEffect(() => {
-        const updatePageFromUrl = (): void => {
-            const path = window.location.pathname.replace(/\/+$/, '');
-            if (path === '/imprint') {
-                setCurrentPage('imprint');
-            } else if (path === '/privacy') {
-                setCurrentPage('privacy');
-            } else {
-                setCurrentPage('home');
-            }
-        };
-
-        // Initial load
-        updatePageFromUrl();
+        const updatePageFromUrl = (): void => setCurrentPage(pageFromPath(window.location.pathname));
 
         // Listen for browser back/forward navigation
         window.addEventListener('popstate', updatePageFromUrl);
@@ -119,7 +129,6 @@ function App(): React.JSX.Element {
     const [artemisToken, setArtemisToken] = useState<string>();
     const [artemisUrl, setArtemisUrl] = useState<string>();
     const [gitRef, setGitRef] = useState<string>();
-    const [gitSource, setGitSource] = useState<string>();
     // The link named a valid app (?appDef=), so a git link can be confirmed with one click instead of the picker.
     const [appDefFromLink, setAppDefFromLink] = useState(false);
     const [showGitPicker, setShowGitPicker] = useState(false);
@@ -132,6 +141,7 @@ function App(): React.JSX.Element {
 
     const [standaloneWizardStep, setStandaloneWizardStep] = useState<'language' | 'buildSystem'>('language');
     const [standaloneAppDef, setStandaloneAppDef] = useState<string>();
+    const [launchEphemeral, setLaunchEphemeral] = useState<boolean>(config.useEphemeralStorage);
 
     if (!initialized) {
         const urlParams = new URLSearchParams(window.location.search);
@@ -172,12 +182,16 @@ function App(): React.JSX.Element {
         }
 
         setGitRef(sanitizeGitRef(urlParams.get('gitRef') ?? undefined));
-        setGitSource(sanitizeGitSource(urlParams.get('source') ?? undefined));
 
-        // A git link without an Artemis token can come from anywhere, so it is checked before anything starts.
+        // Anyone can write a git link, so every one that is not a trusted Artemis link is checked before anything starts.
         const linkGitUri = urlParams.get('gitUri');
-        if (linkGitUri && !urlParams.get('artemisToken')) {
-            const problem = checkGitLaunchUri(linkGitUri, config.allowedGitHosts ?? DEFAULT_ALLOWED_GIT_HOSTS);
+        const linkArtemisUrl = urlParams.get('artemisUrl') ?? undefined;
+        if (linkGitUri && !isTrustedArtemisLink(linkGitUri, linkArtemisUrl, config.trustedArtemisHosts)) {
+            const problem = checkGitLaunchUri(linkGitUri, {
+                allowedHosts: config.allowedGitHosts,
+                trustedHosts: config.trustedArtemisHosts,
+                hasArtemisToken: !!urlParams.get('artemisToken')
+            });
             if (problem) {
                 setError(problem);
                 setLaunchBlocked(true);
@@ -275,7 +289,13 @@ function App(): React.JSX.Element {
     };
 
     const handleStartSession = useCallback(
-        (appDefinition: string, buildSystemId?: string): void => {
+        // Resume passes the stored inputs as `replay`. Setting them as state first would not reach
+        // this callback before it runs, and the workspace name would come out different.
+        (appDefinition: string, buildSystemId?: string, replay?: LaunchInputs): void => {
+            const inputs: LaunchInputs = replay ?? { gitUri, gitRef, gitUser, gitMail, artemisUrl, artemisToken, anonymousUser: user };
+            const app = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appDefinition);
+            const tryEphemeral = isEphemeralLaunch(app, config.useEphemeralStorage);
+            setLaunchEphemeral(tryEphemeral);
             setLoading(true);
             setError(undefined);
 
@@ -283,8 +303,8 @@ function App(): React.JSX.Element {
                 TheiaCloud.ping(PingRequest.create(config.serviceUrl, getServiceAuthToken(config)))
                     .then(() => {
                         // ping successful continue with launch
-                        const workspaceUser = config.useKeycloak ? username : user;
-                        const workspace = createWorkspaceName(appDefinition, buildSystemId, workspaceUser, gitUri);
+                        const workspaceUser = config.useKeycloak ? username : inputs.anonymousUser;
+                        const workspace = createWorkspaceName(appDefinition, buildSystemId, workspaceUser, inputs.gitUri);
 
                         const requestOptions: RequestOptions = {
                             timeout: LAUNCH_REQUEST_TIMEOUT,
@@ -293,19 +313,13 @@ function App(): React.JSX.Element {
                         };
 
                         const envFromMap = createLaunchEnv({
-                            artemisToken,
-                            artemisUrl,
-                            gitUri,
-                            gitRef,
-                            gitSource,
-                            gitUser,
-                            gitMail,
-                            buildSystemId,
-                            sessionEnv: sessionEnvFromConfig(config.sessionEnv)
+                            ...inputs,
+                            gitSource: gitSourceOf(inputs.gitUri, inputs.artemisUrl, config.trustedArtemisHosts),
+                            buildSystemId
                         });
 
                         const launchEnv = { fromMap: envFromMap };
-                        const launchUser = config.useKeycloak ? (email ?? username)! : user!;
+                        const launchUser = config.useKeycloak ? (email ?? username)! : inputs.anonymousUser!;
                         const serviceAuthToken = getServiceAuthToken(config);
                         const createWorkspaceLaunchRequest = (): LaunchRequest => ({
                             ...LaunchRequest.createWorkspace(
@@ -341,44 +355,58 @@ function App(): React.JSX.Element {
                             return true;
                         };
 
-                        // `useEphemeralStorage` means "prefer ephemeral when possible".
+                        // The app's `ephemeral` setting (default: `useEphemeralStorage`) means "prefer ephemeral when possible".
                         // App definitions that require a shared workspace are retried with a PVC-backed workspace.
-                        // Template launches always use workspace-backed sessions so that env vars
-                        // are set directly on the container (eager/ephemeral sessions inject env
-                        // vars via data bridge which arrives after the entrypoint has already run).
-                        const launchPromise =
-                            config.useEphemeralStorage && !buildSystemId
-                                ? (() => {
-                                      console.log(`Attempting ephemeral launch for ${appDefinition}`);
-                                      return launchWithRetry(() =>
-                                          TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions)
-                                      ).catch((err: Error) => {
-                                          if (!isWorkspaceRequiredFallbackError(err)) {
-                                              throw err;
-                                          }
+                        const rememberLaunch = (ephemeral: boolean): void =>
+                            saveLastLaunch({
+                                ...inputs,
+                                anonymousUser: config.useKeycloak ? undefined : inputs.anonymousUser,
+                                appDefinition,
+                                buildSystemId,
+                                ephemeral
+                            });
+                        rememberLaunch(tryEphemeral);
 
-                                          console.log(
-                                              `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
-                                          );
-                                          return launchWithRetry(() =>
-                                              TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
-                                          );
-                                      });
-                                  })()
-                                : (() => {
-                                      console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
-                                      return launchWithRetry(() =>
-                                          TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
+                        const launchPromise = tryEphemeral
+                            ? (() => {
+                                  console.log(`Attempting ephemeral launch for ${appDefinition}`);
+                                  return launchWithRetry(() =>
+                                      requireSessionUrl(TheiaCloud.launch(createEphemeralLaunchRequest(), requestOptions))
+                                  ).catch((err: Error) => {
+                                      if (!isWorkspaceRequiredFallbackError(err)) {
+                                          throw err;
+                                      }
+
+                                      console.log(
+                                          `Ephemeral launch for ${appDefinition} requires a shared workspace, retrying with ${workspace}`
                                       );
-                                  })();
+                                      rememberLaunch(false);
+                                      setLaunchEphemeral(false);
+                                      return launchWithRetry(() =>
+                                          requireSessionUrl(TheiaCloud.launch(createWorkspaceLaunchRequest(), requestOptions))
+                                      );
+                                  });
+                              })()
+                            : (() => {
+                                  console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
+                                  return launchWithRetry(() =>
+                                      requireSessionUrl(TheiaCloud.launch(createWorkspaceLaunchRequest(), requestOptions))
+                                  );
+                              })();
 
                         launchPromise
+                            .then(redirectToSession)
                             .catch((err: Error) => {
                                 if (err && (err as any).status === 473) {
                                     setError(
                                         `The app definition '${appDefinition}' is not available in the cluster.\n` +
                                             'Please try launching another application.'
                                     );
+                                    return;
+                                }
+                                if (err && (err as any).status === 553) {
+                                    // The ended session can still be shutting down and count against the per-user limit.
+                                    setError('Your previous session is still shutting down.\nPlease try again in a few seconds.');
                                     return;
                                 }
                                 setError(err.message);
@@ -408,7 +436,7 @@ function App(): React.JSX.Element {
                 setLoading(false);
             });
         },
-        [config, gitUri, gitRef, gitSource, username, user, artemisToken, artemisUrl, gitUser, gitMail, email]
+        [config, gitUri, gitRef, username, user, artemisToken, artemisUrl, gitUser, gitMail, email]
     );
 
     const handleAppSelected = (appId: string, _: string): void => {
@@ -427,6 +455,29 @@ function App(): React.JSX.Element {
         }
     };
 
+    // Only Keycloak users can list their workspaces, and only a stored launch says which one ended.
+    const [sessionEndReason, setSessionEndReason] = useState<SessionEndReason>();
+    useEffect(() => {
+        const launch = currentPage === 'sessionEnded' ? readLastLaunch() : undefined;
+        if (!config?.useKeycloak || !username || !keycloakClient || !launch || launch.ephemeral) {
+            return;
+        }
+        const workspace = createWorkspaceName(launch.appDefinition, launch.buildSystemId, username, launch.gitUri);
+        const client = keycloakClient;
+        client
+            .updateToken(30)
+            .then(() =>
+                TheiaCloud.Workspace.listWorkspaces(
+                    { serviceUrl: config.serviceUrl, appId: getServiceAuthToken(config), user: email ?? username },
+                    { accessToken: client.idToken }
+                )
+            )
+            .then(workspaces => setSessionEndReason(findSessionEndReason(workspaces, workspace, launch.savedAt)))
+            .catch(() => {
+                // The general explanation stays.
+            });
+    }, [config, currentPage, username, email]);
+
     const handleConfirmIdentity = (confirmedUser: string): void => {
         setUser(confirmedUser);
         setIdentityConfirmed(true);
@@ -438,6 +489,12 @@ function App(): React.JSX.Element {
         }
 
         if (config.useKeycloak && !username) {
+            autoStartRequestedRef.current = false;
+            return;
+        }
+
+        // Resuming an ended session always takes a click.
+        if (currentPage === 'sessionEnded') {
             autoStartRequestedRef.current = false;
             return;
         }
@@ -470,7 +527,8 @@ function App(): React.JSX.Element {
         handleStartSession,
         config.useKeycloak,
         config.trustedArtemisHosts,
-        identityConfirmed
+        identityConfirmed,
+        currentPage
     ]);
 
     /* eslint-enable react-hooks/rules-of-hooks */
@@ -520,6 +578,13 @@ function App(): React.JSX.Element {
         );
     }
 
+    const isSessionEnded = currentPage === 'sessionEnded';
+    const lastLaunch = isSessionEnded ? readLastLaunch() : undefined;
+    const resume = (launch: LastLaunch): void => handleStartSession(launch.appDefinition, launch.buildSystemId, launch);
+    const startNew = (): void => {
+        clearLastLaunch();
+        handleNavigation('home');
+    };
     const gitRepository = repositoryName(gitUri);
     // A git link that names an app: one confirmation click, never an automatic start.
     const confirmGitLaunch = !autoStart && !!gitUri && !artemisToken && appDefFromLink && !showGitPicker;
@@ -536,30 +601,39 @@ function App(): React.JSX.Element {
             />
             <div className='body'>
                 {loading ? (
-                    <Loading text={config.loadingText} />
+                    <Loading text={config.loadingText} ephemeral={launchEphemeral} />
                 ) : (
                     <div>
                         <div>
                             <div style={{ marginTop: '2rem' }}></div>
                             <AppLogo fileExtension={logoFileExtension} />
                             <h2 className='App__title'>
-                                {needsLogin
-                                    ? 'Login to use EduIDE'
-                                    : needsIdentityConfirmation
-                                      ? 'Confirm your identity'
-                                      : autoStart
-                                        ? 'Launch your Online IDE'
-                                        : confirmGitLaunch
-                                          ? `Open ${gitRepository ?? 'the repository'}`
-                                          : standaloneWizardStep === 'buildSystem'
-                                            ? 'Choose your build system'
-                                            : gitRepository && !artemisToken
-                                              ? `Choose the programming language for ${gitRepository}`
-                                              : 'Choose your programming language'}
+                                {isSessionEnded
+                                    ? 'Your session has ended'
+                                    : needsLogin
+                                      ? 'Login to use EduIDE'
+                                      : needsIdentityConfirmation
+                                        ? 'Confirm your identity'
+                                        : autoStart
+                                          ? 'Launch your Online IDE'
+                                          : confirmGitLaunch
+                                            ? `Open ${gitRepository ?? 'the repository'}`
+                                            : standaloneWizardStep === 'buildSystem'
+                                              ? 'Choose your build system'
+                                              : gitRepository && !artemisToken
+                                                ? `Choose the programming language for ${gitRepository}`
+                                                : 'Choose your programming language'}
                             </h2>
                             <div>
-                                {launchBlocked ? undefined : needsLogin ? (
+                                {launchBlocked && !isSessionEnded ? undefined : needsLogin ? (
                                     <LoginButton login={authenticate} />
+                                ) : isSessionEnded ? (
+                                    <SessionEnded
+                                        lastLaunch={lastLaunch}
+                                        reason={sessionEndReason}
+                                        onResume={resume}
+                                        onStartNew={startNew}
+                                    />
                                 ) : needsIdentityConfirmation ? (
                                     <ConfirmIdentity suggestedUser={suggestedUser ?? ''} onConfirm={handleConfirmIdentity} />
                                 ) : confirmGitLaunch ? (
@@ -567,12 +641,13 @@ function App(): React.JSX.Element {
                                         <LaunchApp
                                             appName={selectedAppName}
                                             appDefinition={selectedAppDefinition}
+                                            ephemeral={isEphemeralLaunch(
+                                                config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === selectedAppDefinition),
+                                                config.useEphemeralStorage
+                                            )}
                                             onStartSession={handleStartSession}
                                             label={`Open ${gitRepository ?? 'the repository'} in ${selectedAppName}`}
                                         />
-                                        {config.useEphemeralStorage && (
-                                            <p className='App__git-note'>Changes are lost when the session ends unless you push them.</p>
-                                        )}
                                         <button className='App__link-button' onClick={() => setShowGitPicker(true)}>
                                             Choose another language
                                         </button>
@@ -582,6 +657,10 @@ function App(): React.JSX.Element {
                                         appName={selectedAppName}
                                         appDefinition={selectedAppDefinition}
                                         gitUri={gitUri}
+                                        ephemeral={isEphemeralLaunch(
+                                            config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === selectedAppDefinition),
+                                            config.useEphemeralStorage
+                                        )}
                                         onStartSession={handleStartSession}
                                     />
                                 ) : standaloneWizardStep === 'buildSystem' ? (
@@ -591,7 +670,11 @@ function App(): React.JSX.Element {
                                         onBack={() => setStandaloneWizardStep('language')}
                                     />
                                 ) : (
-                                    <SelectApp appDefinitions={config.additionalApps} onSelectApp={handleAppSelected} />
+                                    <SelectApp
+                                        appDefinitions={config.additionalApps}
+                                        useEphemeralStorage={config.useEphemeralStorage}
+                                        onSelectApp={handleAppSelected}
+                                    />
                                 )}
                             </div>
                         </div>

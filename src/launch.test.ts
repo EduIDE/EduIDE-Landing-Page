@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createAnonymousUser, createLaunchEnv, createWorkspaceName, isTrustedArtemisLink, launchWithRetry } from './launch';
+import {
+    createAnonymousUser,
+    createLaunchEnv,
+    createWorkspaceName,
+    isEphemeralLaunch,
+    isTrustedArtemisLink,
+    launchWithRetry,
+    requireSessionUrl
+} from './launch';
 
 const noWait = (): Promise<void> => Promise.resolve();
 const failure = (status: number, code?: string): object => ({ status, originalError: { code } });
@@ -27,6 +35,12 @@ describe('launchWithRetry', () => {
         const launch = vi.fn().mockRejectedValue(error);
         await expect(launchWithRetry(launch, noWait)).rejects.toBe(error);
         expect(launch).toHaveBeenCalledTimes(1);
+    });
+
+    it('tries again when the service answers without a session URL', async () => {
+        const launch = vi.fn().mockResolvedValueOnce('').mockResolvedValue('session.example');
+        await expect(launchWithRetry(() => requireSessionUrl(launch()), noWait)).resolves.toBe('session.example');
+        expect(launch).toHaveBeenCalledTimes(2);
     });
 
     it('gives up after five attempts and waits between them', async () => {
@@ -96,25 +110,30 @@ describe('createAnonymousUser', () => {
 });
 
 describe('createLaunchEnv', () => {
-    it('passes gitRef and source as GIT_REF and GIT_SOURCE', () => {
-        expect(createLaunchEnv({ gitUri: 'https://github.com/o/r.git', gitRef: 'main', gitSource: 'github' })).toEqual({
+    it('passes gitRef and gitSource as GIT_REF and GIT_SOURCE', () => {
+        expect(createLaunchEnv({ gitUri: 'https://github.com/o/r.git', gitRef: 'main', gitSource: 'external' })).toEqual({
             THEIA: 'true',
             GIT_URI: 'https://github.com/o/r.git',
             GIT_REF: 'main',
-            GIT_SOURCE: 'github'
+            GIT_SOURCE: 'external'
         });
-    });
-
-    it('adds the session env, but lets the launch values win', () => {
-        expect(
-            createLaunchEnv({
-                gitUri: 'https://github.com/o/r.git',
-                sessionEnv: { SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'no', GIT_URI: 'x' }
-            })
-        ).toEqual({ SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'true', GIT_URI: 'https://github.com/o/r.git' });
     });
 
     it('leaves out what the link does not set', () => {
         expect(createLaunchEnv({})).toEqual({ THEIA: 'true' });
+    });
+});
+
+describe('isEphemeralLaunch', () => {
+    it.each([
+        [undefined, true, true],
+        [undefined, false, false],
+        [{}, true, true],
+        [{ ephemeral: false }, true, false],
+        [{ ephemeral: true }, false, true],
+        [{ ephemeral: 'false' }, true, true],
+        [{ ephemeral: 'true' }, false, false]
+    ])('app %j with installation default %s gives %s', (app, installation, expected) => {
+        expect(isEphemeralLaunch(app, installation)).toBe(expected);
     });
 });

@@ -51,6 +51,8 @@ export type ExtendedAppDefinition = AppDefinition & {
     buildSystems?: BuildSystemOption[];
     image?: string;
     visible?: boolean;
+    /** Whether sessions of this app discard their files. Falls back to useEphemeralStorage. */
+    ephemeral?: boolean;
 };
 
 /**
@@ -115,10 +117,8 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
     sentryDsn?: string;
     sentryTracesSampleRate?: number;
     privacy?: PrivacyConfig;
-    /** Hosts a git link without an Artemis token may clone from; default `github.com` (see git-launch.ts). */
+    /** Hosts a git link that is not an Artemis link may clone from; default `github.com` and `gitlab.com` (see git-launch.ts). */
     allowedGitHosts?: string[];
-    /** Variables added to every session, e.g. `SCORPIO_GITHUB_CLIENT_ID` (chart: `landingPage.sessionEnv`). */
-    sessionEnv?: Record<string, string>;
     /** Hosts whose Artemis links may start a session without a click. */
     trustedArtemisHosts?: string[];
 };

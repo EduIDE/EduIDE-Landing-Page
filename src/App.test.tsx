@@ -2,7 +2,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const theia = vi.hoisted(() => ({ ping: vi.fn(), launchAndRedirect: vi.fn() }));
+import { redirectToSession } from './launch';
+
+const theia = vi.hoisted(() => ({ ping: vi.fn(), launch: vi.fn(), Workspace: { listWorkspaces: vi.fn() } }));
 const keycloak = vi.hoisted(() => ({
     constructed: [] as unknown[],
     init: vi.fn(),
@@ -15,6 +17,12 @@ const keycloak = vi.hoisted(() => ({
 vi.mock('@eclipse-theiacloud/common', async importOriginal => ({
     ...(await importOriginal<typeof import('@eclipse-theiacloud/common')>()),
     TheiaCloud: theia
+}));
+
+// jsdom cannot navigate, so the redirect after a launch is only recorded.
+vi.mock('./launch', async importOriginal => ({
+    ...(await importOriginal<typeof import('./launch')>()),
+    redirectToSession: vi.fn()
 }));
 
 vi.mock('keycloak-js', () => ({
@@ -51,7 +59,6 @@ const BASE_CONFIG = {
     useKeycloak: false,
     useEphemeralStorage: true,
     trustedArtemisHosts: ['git.example'],
-    allowedGitHosts: ['git.example'],
     additionalApps: [JAVA, C_MULTI, RUST_SINGLE, HIDDEN]
 };
 const KEYCLOAK_CONFIG = {
@@ -61,6 +68,7 @@ const KEYCLOAK_CONFIG = {
     keycloakRealm: 'realm',
     keycloakClientId: 'client'
 };
+const PERSISTENT_KEYCLOAK = { ...KEYCLOAK_CONFIG, useEphemeralStorage: false };
 
 const LOADING_TEXT = /hang in tight/;
 const GIT_URI = 'https://student:SECRET@git.example/org/my-repo.git';
@@ -95,7 +103,7 @@ function query(params: Record<string, string>): string {
 }
 
 async function launchCount(expected: number): Promise<void> {
-    await waitFor(() => expect(theia.launchAndRedirect).toHaveBeenCalledTimes(expected));
+    await waitFor(() => expect(theia.launch).toHaveBeenCalledTimes(expected));
     await waitFor(() => expect(screen.queryByText(LOADING_TEXT)).toBeNull());
 }
 
@@ -105,17 +113,18 @@ async function selectApp(id: string, launches = 1): Promise<void> {
 }
 
 function launchRequest(call = 0): Record<string, any> {
-    return theia.launchAndRedirect.mock.calls[call][0];
+    return theia.launch.mock.calls[call][0];
 }
 
 async function renderAuthenticated(
     url = '/',
-    parsedToken: Record<string, string> = { email: 'ada@example.org', preferred_username: 'ada' }
+    parsedToken: Record<string, string> = { email: 'ada@example.org', preferred_username: 'ada' },
+    config: unknown = KEYCLOAK_CONFIG
 ): Promise<void> {
     keycloak.idToken = 'id-token';
     keycloak.idTokenParsed = parsedToken;
     keycloak.init.mockResolvedValue(true);
-    await renderApp(url, KEYCLOAK_CONFIG);
+    await renderApp(url, config);
     await screen.findByText('Choose your programming language');
 }
 
@@ -125,7 +134,7 @@ async function confirmUser(url: string, config: unknown = BASE_CONFIG): Promise<
 }
 
 async function workspaceFor(url: string, config: unknown, appId = 'java-17'): Promise<string> {
-    theia.launchAndRedirect.mockClear();
+    theia.launch.mockClear();
     await confirmUser(url, config);
     await selectApp(appId);
     const { workspaceName } = launchRequest();
@@ -136,7 +145,8 @@ async function workspaceFor(url: string, config: unknown, appId = 'java-17'): Pr
 beforeEach(() => {
     vi.clearAllMocks();
     theia.ping.mockReset().mockResolvedValue(true);
-    theia.launchAndRedirect.mockReset().mockResolvedValue(undefined);
+    theia.launch.mockReset().mockResolvedValue('session.example');
+    theia.Workspace.listWorkspaces.mockReset().mockResolvedValue([]);
     keycloak.constructed.length = 0;
     keycloak.init.mockReset().mockResolvedValue(false);
     keycloak.updateToken.mockReset().mockResolvedValue(true);
@@ -270,7 +280,8 @@ describe('URL parameters', () => {
             GIT_USER: 'ada',
             GIT_MAIL: 'ada@example.org',
             ARTEMIS_URL: TRUSTED_URL,
-            ARTEMIS_TOKEN: 'artemis-secret'
+            ARTEMIS_TOKEN: 'artemis-secret',
+            GIT_SOURCE: 'artemis'
         });
     });
 
@@ -286,6 +297,17 @@ describe('URL parameters', () => {
         expect(launchRequest().appDefinition).toBe('java-17');
         screen.getByText('Launch your Online IDE');
         screen.getByRole('button', { name: /Launch Java 17/ });
+    });
+
+    it('launches an Artemis link to an app with ephemeral: false on a repository workspace without TEMPLATE', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }), {
+            ...BASE_CONFIG,
+            additionalApps: BASE_CONFIG.additionalApps!.map(a => (a.serviceAuthToken === 'java-17' ? { ...a, ephemeral: false } : a))
+        });
+        await launchCount(1);
+        expect(launchRequest().ephemeral).toBe(false);
+        expect(launchRequest().workspaceName).toMatch(/^ws-java-17-my-repo-/);
+        expect(launchRequest().env.fromMap.TEMPLATE).toBeUndefined();
     });
 
     it('also reads the lower-case appdef', async () => {
@@ -310,12 +332,12 @@ describe('URL parameters', () => {
     );
 
     it('asks to confirm a git link that names an app, and passes gitRef and source', async () => {
-        await renderApp(query({ appDef: 'java-17', gitUri: PUBLIC_GIT_URI, gitRef: 'main', source: 'github' }));
+        await renderApp(query({ appDef: 'java-17', gitUri: PUBLIC_GIT_URI, gitRef: 'main' }));
         screen.getByText('Open org/my-repo');
         expect(theia.ping).not.toHaveBeenCalled();
         fireEvent.click(screen.getByRole('button', { name: /Open org\/my-repo in Java 17/ }));
         await launchCount(1);
-        expect(launchRequest().env.fromMap).toMatchObject({ GIT_URI: PUBLIC_GIT_URI, GIT_REF: 'main', GIT_SOURCE: 'github' });
+        expect(launchRequest().env.fromMap).toMatchObject({ GIT_URI: PUBLIC_GIT_URI, GIT_REF: 'main', GIT_SOURCE: 'external' });
     });
 
     it('names the repository in the picker after choosing another language', async () => {
@@ -331,14 +353,50 @@ describe('URL parameters', () => {
         expect(screen.queryByTestId('launch-app-java-17')).toBeNull();
     });
 
-    it('adds the configured session env to every launch', async () => {
-        await renderApp('/', { ...BASE_CONFIG, sessionEnv: { SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'no' } });
+    it.each([
+        ['a gitlab.com link', 'https://gitlab.com/group/sub/repo.git', BASE_CONFIG],
+        ['a configured Gitea host', 'https://gitea.example/o/r.git', { ...BASE_CONFIG, allowedGitHosts: ['Gitea.Example'] }]
+    ])('accepts %s', async (_, gitUri, config) => {
+        await renderApp(query({ appDef: 'java-17', gitUri }), config);
+        fireEvent.click(screen.getByRole('button', { name: /Open .* in Java 17/ }));
+        await launchCount(1);
+        expect(launchRequest().env.fromMap).toMatchObject({ GIT_URI: gitUri, GIT_SOURCE: 'external' });
+    });
+
+    it('refuses an unknown host, even with an Artemis token', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: 'https://evil.example/o/r.git', artemisToken: 'x' }));
+        screen.getByText(/evil\.example cannot be opened/);
+        expect(screen.queryByRole('button', { name: /Open|Launch/ })).toBeNull();
+        expect(theia.ping).not.toHaveBeenCalled();
+    });
+
+    it('refuses credentials without an Artemis token, without showing them', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: 'https://u:SECRET@github.com/o/r.git' }));
+        screen.getByText(/must not contain credentials/);
+        expect(document.body.textContent).not.toContain('SECRET');
+    });
+
+    it('ignores a source parameter and sets GIT_SOURCE=external for an untrusted link', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: 'https://github.com/o/r.git', source: 'artemis' }));
+        fireEvent.click(screen.getByRole('button', { name: /Open o\/r in Java 17/ }));
+        await launchCount(1);
+        expect(launchRequest().env.fromMap.GIT_SOURCE).toBe('external');
+    });
+
+    it('sets GIT_SOURCE=artemis for a trusted Artemis link', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
+        await launchCount(1);
+        expect(launchRequest().env.fromMap.GIT_SOURCE).toBe('artemis');
+    });
+
+    it('sets no GIT_SOURCE without a gitUri', async () => {
+        await renderApp();
         await selectApp('java-17');
-        expect(launchRequest().env.fromMap).toMatchObject({ SCORPIO_GITHUB_CLIENT_ID: 'id', THEIA: 'true' });
+        expect(launchRequest().env.fromMap.GIT_SOURCE).toBeUndefined();
     });
 
     it.each([
-        ['the repository host is not trusted', { gitUri: 'https://evil.example/r.git', artemisUrl: TRUSTED_URL }],
+        ['the repository host is not trusted', { gitUri: 'https://github.com/o/r.git', artemisUrl: TRUSTED_URL }],
         ['the Artemis host is not trusted', { gitUri: GIT_URI, artemisUrl: 'https://evil.example' }],
         ['the link has no Artemis URL', { gitUri: GIT_URI }]
     ])('waits for a click when %s', async (_, params) => {
@@ -351,7 +409,7 @@ describe('URL parameters', () => {
     });
 
     it('offers launching again after a failed auto-launch', async () => {
-        theia.launchAndRedirect.mockRejectedValueOnce(new Error('launch failed'));
+        theia.launch.mockRejectedValueOnce(new Error('launch failed'));
         await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
         await launchCount(1);
         await screen.findByText('ERROR: launch failed');
@@ -404,7 +462,7 @@ describe('URL parameters', () => {
         it('does not auto-launch something else after rejecting appDef', async () => {
             await renderApp(query({ appDef: 'unknown', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
             await waitFor(() => expect(screen.queryByText(LOADING_TEXT)).toBeNull());
-            expect(theia.launchAndRedirect).not.toHaveBeenCalled();
+            expect(theia.launch).not.toHaveBeenCalled();
         });
     });
 });
@@ -422,6 +480,14 @@ describe('authentication', () => {
                 checkLoginIframe: false
             });
             expect(window.location.href).toContain(url);
+        });
+
+        it('drops the Keycloak callback fragment from the redirect URI but keeps the query string', async () => {
+            const url = query({ gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL });
+            await renderApp(`${url}#state=abc&session_state=xyz&code=123`, KEYCLOAK_CONFIG);
+            const { redirectUri } = keycloak.init.mock.calls[0][0] as { redirectUri: string };
+            expect(redirectUri).not.toContain('#');
+            expect(redirectUri).toContain(url);
         });
 
         it('asks anonymous visitors to log in and does not auto-launch', async () => {
@@ -484,17 +550,17 @@ describe('authentication', () => {
             screen.getByText('ada@example.org');
             await selectApp('java-17');
             expect(launchRequest().user).toBe('ada@example.org');
-            expect(theia.launchAndRedirect.mock.calls[0][1]).toEqual({ timeout: 60000, retries: 0, accessToken: 'id-token' });
+            expect(theia.launch.mock.calls[0][1]).toEqual({ timeout: 60000, retries: 0, accessToken: 'id-token' });
         });
 
         it('names the workspace after the username, falling back to the email', async () => {
-            await renderAuthenticated();
+            await renderAuthenticated('/', undefined, PERSISTENT_KEYCLOAK);
             await selectApp('rust');
             expect(launchRequest().workspaceName).toMatch(/^ws-rust-cargo-playground-ada-[0-9a-f]+$/);
 
             cleanup();
-            theia.launchAndRedirect.mockClear();
-            await renderAuthenticated('/', { email: 'ada@example.org' });
+            theia.launch.mockClear();
+            await renderAuthenticated('/', { email: 'ada@example.org' }, PERSISTENT_KEYCLOAK);
             await selectApp('rust');
             expect(launchRequest().workspaceName).toMatch(/^ws-rust-cargo-playground-ada-example-+[0-9a-f]+$/);
         });
@@ -511,7 +577,7 @@ describe('authentication', () => {
             await selectApp('java-17').catch(() => undefined);
             await screen.findByText(/Your login has expired/);
             screen.getByTestId('loginButton');
-            expect(theia.launchAndRedirect).not.toHaveBeenCalled();
+            expect(theia.launch).not.toHaveBeenCalled();
         });
 
         it('ignores ?user= because the identity comes from the token', async () => {
@@ -547,7 +613,7 @@ describe('authentication', () => {
             screen.getByText('Launch session');
             await selectApp('java-17');
             expect(launchRequest().user).toMatch(/^anonymous-[a-z0-9]+$/);
-            expect(theia.launchAndRedirect.mock.calls[0][1].accessToken).toBeUndefined();
+            expect(theia.launch.mock.calls[0][1].accessToken).toBeUndefined();
         });
 
         it('does not adopt ?user= until it is confirmed', async () => {
@@ -664,11 +730,17 @@ describe('launching', () => {
         expect(launchRequest().workspaceName).toMatch(/^ws-java-17-playground-anonymous-/);
     });
 
+    it('redirects to the session URL the service returns', async () => {
+        await renderApp();
+        await selectApp('java-17');
+        expect(redirectToSession).toHaveBeenCalledWith('session.example');
+    });
+
     it('shows the loading text while launching', async () => {
         let finish: () => void = () => undefined;
-        theia.launchAndRedirect.mockReturnValue(
-            new Promise<void>(resolve => {
-                finish = resolve;
+        theia.launch.mockReturnValue(
+            new Promise<string>(resolve => {
+                finish = () => resolve('session.example');
             })
         );
         await renderApp('/', { ...BASE_CONFIG, loadingText: 'Please wait' });
@@ -685,30 +757,30 @@ describe('launching', () => {
         await renderApp();
         fireEvent.click(screen.getByTestId('launch-app-java-17'));
         await screen.findByText(/performing some maintenance/);
-        expect(theia.launchAndRedirect).not.toHaveBeenCalled();
+        expect(theia.launch).not.toHaveBeenCalled();
     });
 
     it('explains an app definition missing from the cluster', async () => {
-        theia.launchAndRedirect.mockRejectedValue(rejection(473));
+        theia.launch.mockRejectedValue(rejection(473));
         await renderApp();
         await selectApp('java-17');
         await screen.findByText(/The app definition 'java-17' is not available in the cluster/);
     });
 
     it('shows other launch errors and hides the info message', async () => {
-        theia.launchAndRedirect.mockRejectedValue(rejection(500, {}, 'kaputt'));
+        theia.launch.mockRejectedValue(rejection(500, {}, 'kaputt'));
         await renderApp();
         await selectApp('java-17');
         await screen.findByText('ERROR: kaputt');
         expect(screen.queryByText('Launch session')).toBeNull();
-        expect(theia.launchAndRedirect).toHaveBeenCalledTimes(1);
+        expect(theia.launch).toHaveBeenCalledTimes(1);
     });
 
     it.each([
         ['names the workspace requirement', { serverError: { reason: 'App requires a workspace-backed session' } }],
         ['has no reason body', {}]
     ])('retries on a workspace when a 400 %s', async (_, extra) => {
-        theia.launchAndRedirect.mockRejectedValueOnce(rejection(400, extra));
+        theia.launch.mockRejectedValueOnce(rejection(400, extra));
         await renderApp();
         await selectApp('java-17', 2);
         expect(launchRequest(0).ephemeral).toBe(true);
@@ -718,21 +790,34 @@ describe('launching', () => {
         expect(screen.queryByText(/ERROR/)).toBeNull();
     });
 
+    it('refused ephemeral template launch retries on the per-template workspace, keeps TEMPLATE and shows Saved meanwhile', async () => {
+        theia.launch.mockRejectedValueOnce(rejection(400)).mockReturnValueOnce(new Promise(() => undefined));
+        await renderApp();
+        fireEvent.click(screen.getByTestId('launch-app-c-lang'));
+        fireEvent.click(screen.getByTestId('build-system-make'));
+        await waitFor(() => expect(theia.launch).toHaveBeenCalledTimes(2));
+        expect(launchRequest(0).ephemeral).toBe(true);
+        expect(launchRequest(1).ephemeral).toBe(false);
+        expect(launchRequest(1).workspaceName).toMatch(/^ws-c-lang-make-playground-/);
+        expect(launchRequest(1).env.fromMap.TEMPLATE).toBe('make');
+        await screen.findByText('Saved');
+    });
+
     it.each([
         ['has another reason', 400, { serverError: { reason: 'Quota exceeded' } }],
         ['is not a 400', 500, {}],
         ['was not for an ephemeral launch', 400, { request: { kind: 'launchRequest', ephemeral: false } }],
         ['was not for a launch', 400, { request: { kind: 'somethingElse', ephemeral: true } }]
     ])('does not retry when the rejection %s', async (_, status, extra) => {
-        theia.launchAndRedirect.mockRejectedValue(rejection(status, extra));
+        theia.launch.mockRejectedValue(rejection(status, extra));
         await renderApp();
         await selectApp('java-17');
         await screen.findByText('ERROR: rejected');
-        expect(theia.launchAndRedirect).toHaveBeenCalledTimes(1);
+        expect(theia.launch).toHaveBeenCalledTimes(1);
     });
 
     it('reports a failed workspace retry', async () => {
-        theia.launchAndRedirect.mockRejectedValueOnce(rejection(400)).mockRejectedValueOnce(new Error('retry failed'));
+        theia.launch.mockRejectedValueOnce(rejection(400)).mockRejectedValueOnce(new Error('retry failed'));
         await renderApp();
         await selectApp('java-17', 2);
         await screen.findByText('ERROR: retry failed');
@@ -745,7 +830,7 @@ describe('build-system picker', () => {
         screen.getByText('Choose your build system');
         expect(theia.ping).not.toHaveBeenCalled();
         fireEvent.click(screen.getByTestId(`build-system-${id}`));
-        await launchCount(theia.launchAndRedirect.mock.calls.length + 1);
+        await launchCount(theia.launch.mock.calls.length + 1);
     }
 
     it('appears with two or more build systems and launches the choice', async () => {
@@ -789,21 +874,41 @@ describe('build-system picker', () => {
         expect(launchRequest().env.fromMap.TEMPLATE).toBeUndefined();
     });
 
-    it('never launches a build system ephemerally, even with useEphemeralStorage on', async () => {
+    it('launches a build system ephemerally when the app is ephemeral, still sending TEMPLATE', async () => {
         await renderApp();
         await pickBuildSystem('make');
-        expect(launchRequest().ephemeral).toBe(false);
-        expect(launchRequest().workspaceName).toBeDefined();
+        expect(launchRequest().ephemeral).toBe(true);
+        expect(launchRequest().env.fromMap.TEMPLATE).toBe('make');
     });
 
-    it('never launches an auto-selected build system ephemerally', async () => {
+    it('launches an auto-selected build system ephemerally', async () => {
         await renderApp();
         await selectApp('rust');
+        expect(launchRequest().ephemeral).toBe(true);
+    });
+
+    it('lets an app opt out of the installation default and keeps per-template workspaces', async () => {
+        await renderApp('/', {
+            ...BASE_CONFIG,
+            additionalApps: BASE_CONFIG.additionalApps!.map(a => (a.serviceAuthToken === 'rust' ? { ...a, ephemeral: false } : a))
+        });
+        await selectApp('rust');
         expect(launchRequest().ephemeral).toBe(false);
+        expect(launchRequest().workspaceName).toMatch(/^ws-rust-cargo-/);
+    });
+
+    it('lets an app opt in to ephemeral when the installation is persistent', async () => {
+        await renderApp('/', {
+            ...BASE_CONFIG,
+            useEphemeralStorage: false,
+            additionalApps: BASE_CONFIG.additionalApps!.map(a => (a.serviceAuthToken === 'java-17' ? { ...a, ephemeral: true } : a))
+        });
+        await selectApp('java-17');
+        expect(launchRequest().ephemeral).toBe(true);
     });
 
     it('gives each build system its own workspace', async () => {
-        await confirmUser(query({ user: 'ada' }));
+        await confirmUser(query({ user: 'ada' }), { ...BASE_CONFIG, useEphemeralStorage: false });
         await pickBuildSystem('make');
         await waitFor(() => screen.getByText('Choose your build system'));
         fireEvent.click(screen.getByTestId('build-system-bazel'));
@@ -811,5 +916,161 @@ describe('build-system picker', () => {
 
         expect(launchRequest(0).workspaceName).toMatch(/^ws-c-lang-make-playground-ada-/);
         expect(launchRequest(1).workspaceName).toMatch(/^ws-c-lang-bazel-playground-ada-/);
+    });
+});
+
+describe('session ended', () => {
+    const WORKSPACE_CONFIG = { ...BASE_CONFIG, useEphemeralStorage: false };
+    const TRUSTED_LINK = { appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL };
+    const ENDED = 'Your session has ended';
+
+    beforeEach(() => window.sessionStorage.clear());
+
+    async function launchThenEnd(config: unknown = WORKSPACE_CONFIG): Promise<void> {
+        await renderApp('/', config);
+        await selectApp('java-17');
+        cleanup();
+        await renderApp('/session-ended', config);
+        screen.getByText(ENDED);
+    }
+
+    it('resumes into the same workspace with the same link', async () => {
+        await renderApp(query(TRUSTED_LINK), WORKSPACE_CONFIG);
+        await launchCount(1);
+        cleanup();
+
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        fireEvent.click(screen.getByRole('button', { name: 'Resume my session' }));
+        await launchCount(2);
+        expect(launchRequest(1).workspaceName).toBe(launchRequest(0).workspaceName);
+        expect(launchRequest(1).user).toBe(launchRequest(0).user);
+        expect(launchRequest(1).env).toEqual(launchRequest(0).env);
+    });
+
+    it('keeps GIT_REF when resuming', async () => {
+        await renderApp(query({ appDef: 'java-17', gitUri: 'https://github.com/o/r.git', gitRef: 'v1.2' }), WORKSPACE_CONFIG);
+        fireEvent.click(screen.getByRole('button', { name: /Open o\/r in Java 17/ }));
+        await launchCount(1);
+        cleanup();
+
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        fireEvent.click(screen.getByRole('button', { name: 'Resume my session' }));
+        await launchCount(2);
+        expect(launchRequest(1).env.fromMap).toMatchObject({ GIT_REF: 'v1.2', GIT_SOURCE: 'external' });
+    });
+
+    it('waits for a click, even with a trusted link in the URL', async () => {
+        await renderApp(`/session-ended?${new URLSearchParams(TRUSTED_LINK)}`, WORKSPACE_CONFIG);
+        screen.getByText(ENDED);
+        expect(theia.launch).not.toHaveBeenCalled();
+    });
+
+    it('offers no resume after an ephemeral session', async () => {
+        await launchThenEnd(BASE_CONFIG);
+        screen.getByText(/could not be kept/);
+        expect(screen.queryByRole('button', { name: 'Resume my session' })).toBeNull();
+    });
+
+    it('offers a resume when an ephemeral launch fell back to a workspace', async () => {
+        theia.launch.mockRejectedValueOnce(
+            Object.assign(new Error('rejected'), { status: 400, request: { kind: 'launchRequest', ephemeral: true } })
+        );
+        await renderApp();
+        await selectApp('java-17', 2);
+        cleanup();
+        await renderApp('/session-ended');
+        screen.getByRole('button', { name: 'Resume my session' });
+    });
+
+    const withJava = (config: object, ephemeral: boolean): object => ({
+        ...config,
+        additionalApps: BASE_CONFIG.additionalApps!.map(a => (a.serviceAuthToken === 'java-17' ? { ...a, ephemeral } : a))
+    });
+
+    it('offers a resume for an app with ephemeral: false on an ephemeral installation', async () => {
+        await launchThenEnd(withJava(BASE_CONFIG, false));
+        screen.getByRole('button', { name: 'Resume my session' });
+    });
+
+    it('offers no resume for an app with ephemeral: true on a persistent installation', async () => {
+        await launchThenEnd(withJava(WORKSPACE_CONFIG, true));
+        expect(screen.queryByRole('button', { name: 'Resume my session' })).toBeNull();
+    });
+
+    it('sends a tab without a stored launch back to the start page', async () => {
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        screen.getByText(/choose your environment again/);
+        fireEvent.click(screen.getByRole('button', { name: 'Start a new session' }));
+        screen.getByText('Choose your programming language');
+        expect(window.location.pathname).toBe('/');
+    });
+
+    it('forgets the launch when the student starts something else', async () => {
+        await launchThenEnd();
+        fireEvent.click(screen.getByRole('button', { name: 'Start something else' }));
+        cleanup();
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        expect(screen.queryByRole('button', { name: 'Resume my session' })).toBeNull();
+    });
+
+    it('offers no resume a day later', async () => {
+        await renderApp('/', WORKSPACE_CONFIG);
+        await selectApp('java-17');
+        cleanup();
+        vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 25 * 60 * 60 * 1000);
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        expect(screen.queryByRole('button', { name: 'Resume my session' })).toBeNull();
+        vi.mocked(Date.now).mockRestore();
+    });
+
+    describe('with the reason from the workspace', () => {
+        const KEYCLOAK_WORKSPACE_CONFIG = { ...KEYCLOAK_CONFIG, useEphemeralStorage: false };
+        const GENERAL = /Sessions close after a period without activity/;
+
+        async function launchThenEndLoggedIn(respond: (workspaceName: string) => Promise<object[]>): Promise<void> {
+            keycloak.idToken = 'id-token';
+            keycloak.idTokenParsed = { email: 'ada@example.org', preferred_username: 'ada' };
+            keycloak.init.mockResolvedValue(true);
+            await renderApp('/', KEYCLOAK_WORKSPACE_CONFIG);
+            await screen.findByText('Choose your programming language');
+            await selectApp('java-17');
+            const workspaceName = launchRequest().workspaceName;
+            theia.Workspace.listWorkspaces.mockImplementation(() => respond(workspaceName));
+            cleanup();
+            await renderApp('/session-ended', KEYCLOAK_WORKSPACE_CONFIG);
+            await screen.findByText(ENDED);
+        }
+
+        it.each([
+            ['inactivity', /closed after a period without activity/],
+            ['lifetime', /reached the maximum time a session may run/]
+        ])('says the session ended for %s', async (reason, text) => {
+            const ended = new Date(Date.now() + 60_000).toISOString();
+            await launchThenEndLoggedIn(async name => [{ name, lastSessionEndReason: reason, lastSessionEndTime: ended }]);
+            await screen.findByText(text);
+            expect(theia.Workspace.listWorkspaces).toHaveBeenCalledWith(
+                expect.objectContaining({ serviceUrl: 'https://service.example', user: 'ada@example.org' }),
+                { accessToken: 'id-token' }
+            );
+        });
+
+        it('keeps the general text when the lookup fails', async () => {
+            await launchThenEndLoggedIn(() => Promise.reject(new Error('down')));
+            await waitFor(() => expect(theia.Workspace.listWorkspaces).toHaveBeenCalled());
+            screen.getByText(GENERAL);
+        });
+
+        it('does not ask without Keycloak', async () => {
+            await launchThenEnd();
+            screen.getByText(GENERAL);
+            expect(theia.Workspace.listWorkspaces).not.toHaveBeenCalled();
+        });
+    });
+
+    it('explains a previous session that is still shutting down', async () => {
+        await launchThenEnd();
+        theia.launch.mockRejectedValue(Object.assign(new Error('limit'), { status: 553 }));
+        fireEvent.click(screen.getByRole('button', { name: 'Resume my session' }));
+        await screen.findByText(/previous session is still shutting down/);
     });
 });
