@@ -28,7 +28,9 @@ import {
     createWorkspaceName,
     isEphemeralLaunch,
     isTrustedArtemisLink,
-    launchWithRetry
+    launchWithRetry,
+    redirectToSession,
+    requireSessionUrl
 } from './launch';
 import type { SessionEndReason } from './sessionEndReason';
 import { findSessionEndReason } from './sessionEndReason';
@@ -340,7 +342,7 @@ function App(): React.JSX.Element {
                             ? (() => {
                                   console.log(`Attempting ephemeral launch for ${appDefinition}`);
                                   return launchWithRetry(() =>
-                                      TheiaCloud.launchAndRedirect(createEphemeralLaunchRequest(), requestOptions)
+                                      requireSessionUrl(TheiaCloud.launch(createEphemeralLaunchRequest(), requestOptions))
                                   ).catch((err: Error) => {
                                       if (!isWorkspaceRequiredFallbackError(err)) {
                                           throw err;
@@ -352,18 +354,19 @@ function App(): React.JSX.Element {
                                       rememberLaunch(false);
                                       setLaunchEphemeral(false);
                                       return launchWithRetry(() =>
-                                          TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
+                                          requireSessionUrl(TheiaCloud.launch(createWorkspaceLaunchRequest(), requestOptions))
                                       );
                                   });
                               })()
                             : (() => {
                                   console.log(`Launching ${appDefinition} with persistent workspace ${workspace}`);
                                   return launchWithRetry(() =>
-                                      TheiaCloud.launchAndRedirect(createWorkspaceLaunchRequest(), requestOptions)
+                                      requireSessionUrl(TheiaCloud.launch(createWorkspaceLaunchRequest(), requestOptions))
                                   );
                               })();
 
                         launchPromise
+                            .then(redirectToSession)
                             .catch((err: Error) => {
                                 if (err && (err as any).status === 473) {
                                     setError(

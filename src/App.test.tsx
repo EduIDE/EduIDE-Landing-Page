@@ -2,7 +2,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { StrictMode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const theia = vi.hoisted(() => ({ ping: vi.fn(), launchAndRedirect: vi.fn(), Workspace: { listWorkspaces: vi.fn() } }));
+import { redirectToSession } from './launch';
+
+const theia = vi.hoisted(() => ({ ping: vi.fn(), launch: vi.fn(), Workspace: { listWorkspaces: vi.fn() } }));
 const keycloak = vi.hoisted(() => ({
     constructed: [] as unknown[],
     init: vi.fn(),
@@ -15,6 +17,12 @@ const keycloak = vi.hoisted(() => ({
 vi.mock('@eclipse-theiacloud/common', async importOriginal => ({
     ...(await importOriginal<typeof import('@eclipse-theiacloud/common')>()),
     TheiaCloud: theia
+}));
+
+// jsdom cannot navigate, so the redirect after a launch is only recorded.
+vi.mock('./launch', async importOriginal => ({
+    ...(await importOriginal<typeof import('./launch')>()),
+    redirectToSession: vi.fn()
 }));
 
 vi.mock('keycloak-js', () => ({
@@ -93,7 +101,7 @@ function query(params: Record<string, string>): string {
 }
 
 async function launchCount(expected: number): Promise<void> {
-    await waitFor(() => expect(theia.launchAndRedirect).toHaveBeenCalledTimes(expected));
+    await waitFor(() => expect(theia.launch).toHaveBeenCalledTimes(expected));
     await waitFor(() => expect(screen.queryByText(LOADING_TEXT)).toBeNull());
 }
 
@@ -103,7 +111,7 @@ async function selectApp(id: string, launches = 1): Promise<void> {
 }
 
 function launchRequest(call = 0): Record<string, any> {
-    return theia.launchAndRedirect.mock.calls[call][0];
+    return theia.launch.mock.calls[call][0];
 }
 
 async function renderAuthenticated(
@@ -124,7 +132,7 @@ async function confirmUser(url: string, config: unknown = BASE_CONFIG): Promise<
 }
 
 async function workspaceFor(url: string, config: unknown, appId = 'java-17'): Promise<string> {
-    theia.launchAndRedirect.mockClear();
+    theia.launch.mockClear();
     await confirmUser(url, config);
     await selectApp(appId);
     const { workspaceName } = launchRequest();
@@ -135,7 +143,7 @@ async function workspaceFor(url: string, config: unknown, appId = 'java-17'): Pr
 beforeEach(() => {
     vi.clearAllMocks();
     theia.ping.mockReset().mockResolvedValue(true);
-    theia.launchAndRedirect.mockReset().mockResolvedValue(undefined);
+    theia.launch.mockReset().mockResolvedValue('session.example');
     theia.Workspace.listWorkspaces.mockReset().mockResolvedValue([]);
     keycloak.constructed.length = 0;
     keycloak.init.mockReset().mockResolvedValue(false);
@@ -334,7 +342,7 @@ describe('URL parameters', () => {
     });
 
     it('offers launching again after a failed auto-launch', async () => {
-        theia.launchAndRedirect.mockRejectedValueOnce(new Error('launch failed'));
+        theia.launch.mockRejectedValueOnce(new Error('launch failed'));
         await renderApp(query({ appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
         await launchCount(1);
         await screen.findByText('ERROR: launch failed');
@@ -387,7 +395,7 @@ describe('URL parameters', () => {
         it('does not auto-launch something else after rejecting appDef', async () => {
             await renderApp(query({ appDef: 'unknown', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL }));
             await waitFor(() => expect(screen.queryByText(LOADING_TEXT)).toBeNull());
-            expect(theia.launchAndRedirect).not.toHaveBeenCalled();
+            expect(theia.launch).not.toHaveBeenCalled();
         });
     });
 });
@@ -475,7 +483,7 @@ describe('authentication', () => {
             screen.getByText('ada@example.org');
             await selectApp('java-17');
             expect(launchRequest().user).toBe('ada@example.org');
-            expect(theia.launchAndRedirect.mock.calls[0][1]).toEqual({ timeout: 60000, retries: 0, accessToken: 'id-token' });
+            expect(theia.launch.mock.calls[0][1]).toEqual({ timeout: 60000, retries: 0, accessToken: 'id-token' });
         });
 
         it('names the workspace after the username, falling back to the email', async () => {
@@ -484,7 +492,7 @@ describe('authentication', () => {
             expect(launchRequest().workspaceName).toMatch(/^ws-rust-cargo-playground-ada-[0-9a-f]+$/);
 
             cleanup();
-            theia.launchAndRedirect.mockClear();
+            theia.launch.mockClear();
             await renderAuthenticated('/', { email: 'ada@example.org' }, PERSISTENT_KEYCLOAK);
             await selectApp('rust');
             expect(launchRequest().workspaceName).toMatch(/^ws-rust-cargo-playground-ada-example-+[0-9a-f]+$/);
@@ -502,7 +510,7 @@ describe('authentication', () => {
             await selectApp('java-17').catch(() => undefined);
             await screen.findByText(/Your login has expired/);
             screen.getByTestId('loginButton');
-            expect(theia.launchAndRedirect).not.toHaveBeenCalled();
+            expect(theia.launch).not.toHaveBeenCalled();
         });
 
         it('ignores ?user= because the identity comes from the token', async () => {
@@ -538,7 +546,7 @@ describe('authentication', () => {
             screen.getByText('Launch session');
             await selectApp('java-17');
             expect(launchRequest().user).toMatch(/^anonymous-[a-z0-9]+$/);
-            expect(theia.launchAndRedirect.mock.calls[0][1].accessToken).toBeUndefined();
+            expect(theia.launch.mock.calls[0][1].accessToken).toBeUndefined();
         });
 
         it('does not adopt ?user= until it is confirmed', async () => {
@@ -652,11 +660,17 @@ describe('launching', () => {
         expect(launchRequest().workspaceName).toMatch(/^ws-java-17-playground-anonymous-/);
     });
 
+    it('redirects to the session URL the service returns', async () => {
+        await renderApp();
+        await selectApp('java-17');
+        expect(redirectToSession).toHaveBeenCalledWith('session.example');
+    });
+
     it('shows the loading text while launching', async () => {
         let finish: () => void = () => undefined;
-        theia.launchAndRedirect.mockReturnValue(
-            new Promise<void>(resolve => {
-                finish = resolve;
+        theia.launch.mockReturnValue(
+            new Promise<string>(resolve => {
+                finish = () => resolve('session.example');
             })
         );
         await renderApp('/', { ...BASE_CONFIG, loadingText: 'Please wait' });
@@ -673,30 +687,30 @@ describe('launching', () => {
         await renderApp();
         fireEvent.click(screen.getByTestId('launch-app-java-17'));
         await screen.findByText(/performing some maintenance/);
-        expect(theia.launchAndRedirect).not.toHaveBeenCalled();
+        expect(theia.launch).not.toHaveBeenCalled();
     });
 
     it('explains an app definition missing from the cluster', async () => {
-        theia.launchAndRedirect.mockRejectedValue(rejection(473));
+        theia.launch.mockRejectedValue(rejection(473));
         await renderApp();
         await selectApp('java-17');
         await screen.findByText(/The app definition 'java-17' is not available in the cluster/);
     });
 
     it('shows other launch errors and hides the info message', async () => {
-        theia.launchAndRedirect.mockRejectedValue(rejection(500, {}, 'kaputt'));
+        theia.launch.mockRejectedValue(rejection(500, {}, 'kaputt'));
         await renderApp();
         await selectApp('java-17');
         await screen.findByText('ERROR: kaputt');
         expect(screen.queryByText('Launch session')).toBeNull();
-        expect(theia.launchAndRedirect).toHaveBeenCalledTimes(1);
+        expect(theia.launch).toHaveBeenCalledTimes(1);
     });
 
     it.each([
         ['names the workspace requirement', { serverError: { reason: 'App requires a workspace-backed session' } }],
         ['has no reason body', {}]
     ])('retries on a workspace when a 400 %s', async (_, extra) => {
-        theia.launchAndRedirect.mockRejectedValueOnce(rejection(400, extra));
+        theia.launch.mockRejectedValueOnce(rejection(400, extra));
         await renderApp();
         await selectApp('java-17', 2);
         expect(launchRequest(0).ephemeral).toBe(true);
@@ -707,11 +721,11 @@ describe('launching', () => {
     });
 
     it('refused ephemeral template launch retries on the per-template workspace, keeps TEMPLATE and shows Saved meanwhile', async () => {
-        theia.launchAndRedirect.mockRejectedValueOnce(rejection(400)).mockReturnValueOnce(new Promise(() => undefined));
+        theia.launch.mockRejectedValueOnce(rejection(400)).mockReturnValueOnce(new Promise(() => undefined));
         await renderApp();
         fireEvent.click(screen.getByTestId('launch-app-c-lang'));
         fireEvent.click(screen.getByTestId('build-system-make'));
-        await waitFor(() => expect(theia.launchAndRedirect).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(theia.launch).toHaveBeenCalledTimes(2));
         expect(launchRequest(0).ephemeral).toBe(true);
         expect(launchRequest(1).ephemeral).toBe(false);
         expect(launchRequest(1).workspaceName).toMatch(/^ws-c-lang-make-playground-/);
@@ -725,15 +739,15 @@ describe('launching', () => {
         ['was not for an ephemeral launch', 400, { request: { kind: 'launchRequest', ephemeral: false } }],
         ['was not for a launch', 400, { request: { kind: 'somethingElse', ephemeral: true } }]
     ])('does not retry when the rejection %s', async (_, status, extra) => {
-        theia.launchAndRedirect.mockRejectedValue(rejection(status, extra));
+        theia.launch.mockRejectedValue(rejection(status, extra));
         await renderApp();
         await selectApp('java-17');
         await screen.findByText('ERROR: rejected');
-        expect(theia.launchAndRedirect).toHaveBeenCalledTimes(1);
+        expect(theia.launch).toHaveBeenCalledTimes(1);
     });
 
     it('reports a failed workspace retry', async () => {
-        theia.launchAndRedirect.mockRejectedValueOnce(rejection(400)).mockRejectedValueOnce(new Error('retry failed'));
+        theia.launch.mockRejectedValueOnce(rejection(400)).mockRejectedValueOnce(new Error('retry failed'));
         await renderApp();
         await selectApp('java-17', 2);
         await screen.findByText('ERROR: retry failed');
@@ -746,7 +760,7 @@ describe('build-system picker', () => {
         screen.getByText('Choose your build system');
         expect(theia.ping).not.toHaveBeenCalled();
         fireEvent.click(screen.getByTestId(`build-system-${id}`));
-        await launchCount(theia.launchAndRedirect.mock.calls.length + 1);
+        await launchCount(theia.launch.mock.calls.length + 1);
     }
 
     it('appears with two or more build systems and launches the choice', async () => {
@@ -866,7 +880,7 @@ describe('session ended', () => {
     it('waits for a click, even with a trusted link in the URL', async () => {
         await renderApp(`/session-ended?${new URLSearchParams(TRUSTED_LINK)}`, WORKSPACE_CONFIG);
         screen.getByText(ENDED);
-        expect(theia.launchAndRedirect).not.toHaveBeenCalled();
+        expect(theia.launch).not.toHaveBeenCalled();
     });
 
     it('offers no resume after an ephemeral session', async () => {
@@ -876,7 +890,7 @@ describe('session ended', () => {
     });
 
     it('offers a resume when an ephemeral launch fell back to a workspace', async () => {
-        theia.launchAndRedirect.mockRejectedValueOnce(
+        theia.launch.mockRejectedValueOnce(
             Object.assign(new Error('rejected'), { status: 400, request: { kind: 'launchRequest', ephemeral: true } })
         );
         await renderApp();
@@ -973,7 +987,7 @@ describe('session ended', () => {
 
     it('explains a previous session that is still shutting down', async () => {
         await launchThenEnd();
-        theia.launchAndRedirect.mockRejectedValue(Object.assign(new Error('limit'), { status: 553 }));
+        theia.launch.mockRejectedValue(Object.assign(new Error('limit'), { status: 553 }));
         fireEvent.click(screen.getByRole('button', { name: 'Resume my session' }));
         await screen.findByText(/previous session is still shutting down/);
     });
