@@ -7,7 +7,7 @@ Landing page for EduIDE Cloud workspace management, providing a user-friendly in
 - **User Authentication**: Keycloak-based authentication and authorization
 - **Workspace Management**: Launch and manage multiple cloud-based IDEs
 - **Dynamic Configuration**: Runtime configuration via `config.js`
-- **Query Parameters**: Support for various URL parameters (appDef, gitUri, gitUser, gitMail, artemisToken, artemisUrl)
+- **Query Parameters**: Support for various URL parameters (appDef, gitUri, gitUser, gitMail, artemisToken, artemisUrl, user)
 - **Responsive Design**: Modern UI with dark/light theme support
 
 ## Prerequisites
@@ -50,10 +50,10 @@ The built files will be in the `dist/` directory.
 
 ```bash
 # Build the Docker image
-docker build -t ghcr.io/EduIDE/eduidec-landing-page:latest .
+docker build -t ghcr.io/eduide/eduide-landing-page:latest .
 
 # Run the container
-docker run -d -p 80:8080 ghcr.io/EduIDE/eduidec-landing-page:latest
+docker run -d -p 80:8080 ghcr.io/eduide/eduide-landing-page:latest
 ```
 
 ## Configuration
@@ -94,8 +94,8 @@ window.theiaCloudConfig = {
       appName: "Python Environment"
     },
     {
-      serviceAuthToken: "java-17-no-ls",
-      appName: "Java 17 No-LS",
+      serviceAuthToken: "java-17",
+      appName: "Java",
       image: "java-17"
     }
   ]
@@ -145,6 +145,7 @@ The landing page supports various URL query parameters to pre-configure the sess
 | `gitMail` | string | Git email for authentication |
 | `artemisUrl` | string | Artemis service URL |
 | `artemisToken` | string | Artemis authentication token |
+| `user` | string | Suggested identity without Keycloak. It is not adopted automatically; the visitor must confirm it first (`ConfirmIdentity`) |
 
 **Auto-clone and private repositories:** On session start the repository is cloned from `gitUri` exactly as provided; no credential is added. For a private repository the credential must be embedded in `gitUri` itself, for example `https://<user>:<token>@host/org/repo.git`. A plain `gitUri` without embedded credentials only works for public repositories. Because `gitUri` may contain a token, treat the URL as sensitive.
 
@@ -185,6 +186,7 @@ EduIDE-Landing-Page/
 ├── src/
 │   ├── components/          # React components
 │   │   ├── AppLogo.tsx
+│   │   ├── ConfirmIdentity.tsx # confirms a `?user=` identity before it is used
 │   │   ├── ErrorComponent.tsx
 │   │   ├── Footer.tsx
 │   │   ├── Header.tsx
@@ -193,8 +195,10 @@ EduIDE-Landing-Page/
 │   │   ├── LaunchApp.tsx
 │   │   ├── Loading.tsx
 │   │   ├── LoginButton.tsx
+│   │   ├── PersistenceBadge.tsx # "Temporary" or "Saved" badge
 │   │   ├── Privacy.tsx
 │   │   ├── SelectApp.tsx
+│   │   ├── SelectBuildSystem.tsx
 │   │   ├── SessionEnded.tsx # /session-ended: explains an ended session, offers to resume it
 │   │   ├── Spinner.tsx
 │   │   └── ThemeToggle.tsx
@@ -303,13 +307,14 @@ This project uses GitHub Actions for automated Docker builds and multi-architect
 ### Workflow Triggers
 
 - **Push to main**: Builds and pushes to `latest` tag
+- **Nightly schedule**: Rebuilds `latest` at 02:00 UTC without layer cache
 - **Pull Request**: Builds image for testing
 - **Manual Dispatch**: Build on demand with a custom tag
 - **Release**: `release.yml`, run by hand with a `version` input, drafts the GitHub Release, builds the image as `X.Y.Z`, verifies it and publishes the release, which creates the `vX.Y.Z` tag (see below)
 
 ### Releasing
 
-Ask Claude to "release the landing page" (skill `.claude/skills/release`) or do it by hand: open a release pull request that bumps `package.json` (`npm version X.Y.Z --no-git-tag-version`) and moves the `## [Unreleased]` entries of `CHANGELOG.md` under `## [X.Y.Z] - YYYY-MM-DD`, then after the merge run `gh workflow run release.yml -R EduIDE/EduIDE-Landing-Page --ref main -f version=X.Y.Z`. The CHANGELOG section becomes the release notes. An `-rc.N` version can run from any branch and makes a prerelease. Afterwards bump `versions.landingPage` in EduIDE-Helm.
+Ask Claude to "release the landing page" (skill `.claude/skills/release`) or do it by hand: open a release pull request that moves the `## [Unreleased]` entries of `CHANGELOG.md` under `## [X.Y.Z] - YYYY-MM-DD`, then after the merge run `gh workflow run release.yml -R EduIDE/EduIDE-Landing-Page --ref main -f version=X.Y.Z`. `package.json` is not a version file; the build stamps the version from the tag. The CHANGELOG section becomes the release notes. An `-rc.N` version can run from any branch and makes a prerelease. Afterwards bump `versions.landingPage` in EduIDE-Helm.
 
 ### Build Platforms
 
@@ -318,7 +323,7 @@ Ask Claude to "release the landing page" (skill `.claude/skills/release`) or do 
 
 ### Image Registry
 
-Built images are pushed to: `ghcr.io/EduIDE/eduidec-landing-page`
+Built images are pushed to: `ghcr.io/eduide/eduide-landing-page`
 
 ## License
 
