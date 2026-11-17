@@ -21,7 +21,7 @@ export function checkGitLaunchUri(gitUri: string, options: { allowedHosts?: stri
         return 'The repository link is not a valid URL.';
     }
     if (url.username || url.password) {
-        return 'Repository links must not contain credentials. Open the repository without them; EduIDE asks you to sign in when needed.';
+        return 'Repository links must not contain credentials. Remove them from the link; EduIDE opens public repositories only.';
     }
     if (url.protocol !== 'https:') {
         return 'Only HTTPS repository links can be opened.';
