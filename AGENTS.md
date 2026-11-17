@@ -115,7 +115,7 @@ whose names are a contract with the IDE image's entrypoint and Scorpio, not with
 A link with a `gitUri` is either a trusted Artemis link (`isTrustedArtemisLink`: the hosts of both `gitUri`
 and `artemisUrl` are in `trustedArtemisHosts`) or an external one. Anyone can write an external link, so it is
 checked before anything starts (`src/common-extensions/git-launch.ts`), whatever else it carries: a valid HTTPS
-URL on a host in `allowedGitHosts` (default `github.com` and `gitlab.com`; add Gitea or Forgejo hosts here) or
+URL on a host in `allowedGitHosts` (no default; for example `github.com`, `gitlab.com` and Gitea hosts) or
 in `trustedArtemisHosts`, and no credentials in it. A link that fails shows the reason and nothing else, never
 the credentials. An external link passes on only `GIT_URI` (the parsed `url.href`, because plain git can read
 a raw string such as `https://github.com\@evil.example/x.git` differently) and `GIT_REF`; `artemisUrl`,
@@ -124,9 +124,9 @@ again on Resume. One that names a valid `appDef` gets a confirmation button ("Op
 instead of the picker, and never starts by itself.
 
 Git links are an alpha feature, on only while `allowedGitHosts` lists a host (`gitLinksEnabled`; the chart
-renders an empty list by default). While off, `checkGitLaunchUri` refuses every external link, and `gitLinkKind`
+renders an empty list by default, and a missing key counts as empty). While off, `checkGitLaunchUri` refuses every external link, and `gitLinkKind`
 returns `legacy` for a link that is not a trusted Artemis link but carries an `artemisToken`: it works as before
-git links (a click, every parameter passed on, no `GIT_SOURCE`), so installations without `trustedArtemisHosts`
+git links (a click, every parameter but `gitRef` passed on, no `GIT_SOURCE`), so installations without `trustedArtemisHosts`
 keep their Artemis links. Once on, a token no longer makes a link an Artemis link.
 
 The check compares the host with its port, `isTrustedArtemisLink` compares the hostname without it. A port

@@ -173,21 +173,20 @@ function App(): React.JSX.Element {
             }
         }
 
-        setGitRef(sanitizeGitRef(urlParams.get('gitRef') ?? undefined));
-
         // A link is either a trusted Artemis link or an external one. Anyone can write an external link, so it is checked
         // before anything starts and passes on only gitUri and gitRef, never an Artemis URL, token or identity.
         const linkGitUri = urlParams.get('gitUri');
-        const external =
-            !!linkGitUri &&
-            gitLinkKind(
-                {
-                    gitUri: linkGitUri,
-                    artemisUrl: urlParams.get('artemisUrl') ?? undefined,
-                    artemisToken: urlParams.get('artemisToken') ?? undefined
-                },
-                config
-            ) === 'external';
+        const kind = gitLinkKind(
+            {
+                gitUri: linkGitUri ?? undefined,
+                artemisUrl: urlParams.get('artemisUrl') ?? undefined,
+                artemisToken: urlParams.get('artemisToken') ?? undefined
+            },
+            config
+        );
+        const external = kind === 'external';
+        // A legacy link works exactly as before git links, which knew no gitRef.
+        setGitRef(kind === 'legacy' ? undefined : sanitizeGitRef(urlParams.get('gitRef') ?? undefined));
         if (linkGitUri) {
             const problem = external
                 ? checkGitLaunchUri(linkGitUri, { allowedHosts: config.allowedGitHosts, trustedHosts: config.trustedArtemisHosts })

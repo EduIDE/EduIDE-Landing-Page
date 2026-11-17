@@ -59,6 +59,7 @@ const BASE_CONFIG = {
     useKeycloak: false,
     useEphemeralStorage: true,
     trustedArtemisHosts: ['git.example'],
+    allowedGitHosts: ['github.com', 'gitlab.com'],
     additionalApps: [JAVA, C_MULTI, RUST_SINGLE, HIDDEN]
 };
 const KEYCLOAK_CONFIG = {
@@ -431,6 +432,47 @@ describe('URL parameters', () => {
             const env = launchRequest().env.fromMap;
             expect(env).toMatchObject({ GIT_URI: GIT_URI, ARTEMIS_TOKEN: 'token', GIT_USER: 'student' });
             expect(env.GIT_SOURCE).toBeUndefined();
+        });
+
+        it('drops gitRef from a legacy link, as before git links', async () => {
+            await renderApp(query({ ...ARTEMIS_LINK, gitRef: 'main' }), OFF_CONFIG);
+            fireEvent.click(await screen.findByRole('button', { name: /Launch Java 17/ }));
+            await launchCount(1);
+            expect(launchRequest().env.fromMap.GIT_REF).toBeUndefined();
+        });
+
+        it('treats a config without allowedGitHosts as off, so an untrusted Artemis link works after a click', async () => {
+            const noKey: Record<string, unknown> = { ...BASE_CONFIG };
+            delete noKey.allowedGitHosts;
+            await renderApp(
+                query({
+                    ...ARTEMIS_LINK,
+                    gitUri: 'https://artemis.uni-mannheim.de/git/o/r.git',
+                    artemisUrl: 'https://artemis.uni-mannheim.de'
+                }),
+                { ...noKey, trustedArtemisHosts: undefined }
+            );
+            expect(theia.ping).not.toHaveBeenCalled();
+            fireEvent.click(await screen.findByRole('button', { name: /Launch Java 17/ }));
+            await launchCount(1);
+            const env = launchRequest().env.fromMap;
+            expect(env).toMatchObject({ GIT_URI: 'https://artemis.uni-mannheim.de/git/o/r.git', ARTEMIS_TOKEN: 'token' });
+            expect(env.GIT_SOURCE).toBeUndefined();
+        });
+
+        it.each([
+            ['the repository host is not trusted', { gitUri: 'https://evil.example/r.git', artemisUrl: TRUSTED_URL }],
+            ['the Artemis host is not trusted', { gitUri: GIT_URI, artemisUrl: 'https://evil.example' }],
+            ['the link has no Artemis URL', { gitUri: GIT_URI }]
+        ])('waits for a click when %s', async (_, params) => {
+            await renderApp(query({ appDef: 'java-17', artemisToken: 'token', ...params }), {
+                ...OFF_CONFIG,
+                trustedArtemisHosts: ['git.example']
+            });
+            const launch = await screen.findByRole('button', { name: /Launch Java 17/ });
+            expect(theia.ping).not.toHaveBeenCalled();
+            fireEvent.click(launch);
+            await launchCount(1);
         });
 
         it('refuses a repository link without an Artemis token', async () => {

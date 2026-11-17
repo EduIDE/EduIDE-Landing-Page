@@ -5,9 +5,6 @@ import { isTrustedArtemisLink } from '../launch';
  * links from Artemis, which carry an artemisToken and the student's VCS credentials.
  */
 
-/** Hosts a link that is not an Artemis link may clone from, unless `allowedGitHosts` is configured. */
-export const DEFAULT_ALLOWED_GIT_HOSTS = ['github.com', 'gitlab.com'];
-
 /**
  * Why a git link that is not a trusted Artemis link must not be launched, or undefined if it may be. Such a link can
  * come from anywhere on the internet, so EduIDE only clones from known hosts (`allowedHosts` and the Artemis hosts in
@@ -29,7 +26,7 @@ export function checkGitLaunchUri(gitUri: string, options: { allowedHosts?: stri
     if (url.protocol !== 'https:') {
         return 'Only HTTPS repository links can be opened.';
     }
-    const allowed = [...(options.allowedHosts ?? DEFAULT_ALLOWED_GIT_HOSTS), ...(options.trustedHosts ?? [])]
+    const allowed = [...(options.allowedHosts ?? []), ...(options.trustedHosts ?? [])]
         .map(host => host.trim().toLowerCase())
         .filter(Boolean);
     if (!allowed.includes(url.host.toLowerCase())) {
@@ -50,9 +47,12 @@ export function gitSourceOf(
     return isTrustedArtemisLink(gitUri, artemisUrl, trustedHosts) ? 'artemis' : 'external';
 }
 
-/** Links to repositories outside Artemis are an alpha feature, on only while `allowedGitHosts` lists a host. */
+/**
+ * Links to repositories outside Artemis are an alpha feature, on only while `allowedGitHosts` lists a host. A config
+ * without the key (a chart that predates it) counts as off, so its Artemis links keep working.
+ */
 export function gitLinksEnabled(allowedHosts: string[] | undefined): boolean {
-    return (allowedHosts ?? DEFAULT_ALLOWED_GIT_HOSTS).some(host => host.trim());
+    return (allowedHosts ?? []).some(host => host.trim());
 }
 
 /**
@@ -88,10 +88,11 @@ export function repositoryName(gitUri: string | undefined): string | undefined {
     }
 }
 
-/** A branch, tag or commit for GIT_REF; anything that could be read as an option or a range is dropped. */
+/** A branch, tag or commit for GIT_REF; anything that could be read as an option, a range or a control character is dropped. */
 export function sanitizeGitRef(ref: string | undefined): string | undefined {
     const value = ref?.trim();
-    if (!value || value.length > 255 || value.startsWith('-') || /[\s~^:?*[\\]|\.\.|@\{/.test(value)) {
+    // eslint-disable-next-line no-control-regex
+    if (!value || value.length > 255 || value.startsWith('-') || /[\s~^:?*[\\\x00-\x1f\x7f]|\.\.|@\{/.test(value)) {
         return undefined;
     }
     return value;

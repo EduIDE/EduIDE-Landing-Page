@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkGitLaunchUri, gitLinkKind, gitSourceOf, repositoryName, sanitizeGitRef } from './git-launch';
+import { checkGitLaunchUri as check, gitLinkKind, gitSourceOf, repositoryName, sanitizeGitRef } from './git-launch';
+
+const ON = { allowedHosts: ['github.com', 'gitlab.com'] };
+const checkGitLaunchUri = (uri: string, options: { allowedHosts?: string[]; trustedHosts?: string[] } = {}): string | undefined =>
+    check(uri, { ...ON, ...options });
 
 describe('checkGitLaunchUri', () => {
     it('accepts an HTTPS link to an allowed host', () => {
@@ -8,7 +12,7 @@ describe('checkGitLaunchUri', () => {
         expect(checkGitLaunchUri('https://git.example/org/repo', { allowedHosts: [' Git.Example '] })).toBeUndefined();
     });
 
-    it('accepts GitLab by default and an Artemis host from trustedHosts', () => {
+    it('accepts GitLab and an Artemis host from trustedHosts', () => {
         expect(checkGitLaunchUri('https://gitlab.com/group/sub/repo.git')).toBeUndefined();
         expect(checkGitLaunchUri('https://artemis.example/o/r.git', { trustedHosts: ['artemis.example'] })).toBeUndefined();
     });
@@ -46,7 +50,8 @@ describe('checkGitLaunchUri', () => {
 });
 
 describe('git links off', () => {
-    it('refuses every link while allowedGitHosts is empty', () => {
+    it('refuses every link while allowedGitHosts is empty or missing', () => {
+        expect(check('https://github.com/o/r.git')).toMatch(/not enabled/);
         expect(checkGitLaunchUri('https://github.com/o/r.git', { allowedHosts: [' '] })).toMatch(/not enabled/);
         expect(checkGitLaunchUri('https://artemis.example/o/r.git', { allowedHosts: [], trustedHosts: ['artemis.example'] })).toMatch(
             /not enabled/
@@ -59,7 +64,8 @@ describe('gitLinkKind', () => {
 
     it('keeps an untrusted link with a token as legacy only while git links are off', () => {
         expect(gitLinkKind(untrusted, { allowedGitHosts: [] })).toBe('legacy');
-        expect(gitLinkKind(untrusted, {})).toBe('external');
+        expect(gitLinkKind(untrusted, {})).toBe('legacy');
+        expect(gitLinkKind(untrusted, { allowedGitHosts: ['github.com'] })).toBe('external');
         expect(gitLinkKind({ ...untrusted, artemisToken: undefined }, { allowedGitHosts: [] })).toBe('external');
     });
 
@@ -91,12 +97,29 @@ describe('sanitizeGitRef', () => {
         expect(sanitizeGitRef(' main ')).toBe('main');
     });
 
-    it.each([undefined, '', '--upload-pack=x', 'a..b', 'a b', 'a~1', 'a^', 'a:b', 'a?', 'a*', 'a[b', 'a\\b', 'a@{1}', 'x'.repeat(256)])(
-        'drops %j',
-        ref => {
-            expect(sanitizeGitRef(ref)).toBeUndefined();
-        }
-    );
+    it.each([
+        undefined,
+        '',
+        '--upload-pack=x',
+        'a..b',
+        'a b',
+        'a~1',
+        'a^',
+        'a:b',
+        'a?',
+        'a*',
+        'a[b',
+        'a\\b',
+        'a@{1}',
+        'a\nb',
+        'a\x00b',
+        'a\tb',
+        'a\x1bb',
+        'a\x7fb',
+        'x'.repeat(256)
+    ])('drops %j', ref => {
+        expect(sanitizeGitRef(ref)).toBeUndefined();
+    });
 });
 
 describe('gitSourceOf', () => {
