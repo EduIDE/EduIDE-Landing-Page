@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkGitLaunchUri, gitSourceOf, repositoryName, sanitizeGitRef } from './git-launch';
+import { checkGitLaunchUri, gitLinkKind, gitSourceOf, repositoryName, sanitizeGitRef } from './git-launch';
 
 describe('checkGitLaunchUri', () => {
     it('accepts an HTTPS link to an allowed host', () => {
@@ -42,6 +42,29 @@ describe('checkGitLaunchUri', () => {
 
     it('allows only the configured hosts', () => {
         expect(checkGitLaunchUri('https://gitlab.com/org/repo.git', { allowedHosts: ['github.com'] })).toMatch(/cannot be opened/);
+    });
+});
+
+describe('git links off', () => {
+    it('refuses every link while allowedGitHosts is empty', () => {
+        expect(checkGitLaunchUri('https://github.com/o/r.git', { allowedHosts: [' '] })).toMatch(/not enabled/);
+        expect(checkGitLaunchUri('https://artemis.example/o/r.git', { allowedHosts: [], trustedHosts: ['artemis.example'] })).toMatch(
+            /not enabled/
+        );
+    });
+});
+
+describe('gitLinkKind', () => {
+    const untrusted = { gitUri: 'https://git.example/o/r.git', artemisUrl: 'https://git.example', artemisToken: 't' };
+
+    it('keeps an untrusted link with a token as legacy only while git links are off', () => {
+        expect(gitLinkKind(untrusted, { allowedGitHosts: [] })).toBe('legacy');
+        expect(gitLinkKind(untrusted, {})).toBe('external');
+        expect(gitLinkKind({ ...untrusted, artemisToken: undefined }, { allowedGitHosts: [] })).toBe('external');
+    });
+
+    it('reports a trusted Artemis link as artemis either way', () => {
+        expect(gitLinkKind(untrusted, { allowedGitHosts: [], trustedArtemisHosts: ['git.example'] })).toBe('artemis');
     });
 });
 

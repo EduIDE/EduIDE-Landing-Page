@@ -4,7 +4,7 @@ import { getTheiaCloudConfig, LaunchRequest, PingRequest, RequestOptions, TheiaC
 import Keycloak, { KeycloakConfig } from 'keycloak-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { checkGitLaunchUri, gitSourceOf, repositoryName, sanitizeGitRef } from './common-extensions/git-launch';
+import { checkGitLaunchUri, gitLinkKind, repositoryName, sanitizeGitRef } from './common-extensions/git-launch';
 import type { ExtendedAppDefinition, ExtendedTheiaCloudConfig } from './common-extensions/types';
 import { getServiceAuthToken } from './common-extensions/types';
 import { AppLogo } from './components/AppLogo';
@@ -179,7 +179,15 @@ function App(): React.JSX.Element {
         // before anything starts and passes on only gitUri and gitRef, never an Artemis URL, token or identity.
         const linkGitUri = urlParams.get('gitUri');
         const external =
-            !!linkGitUri && gitSourceOf(linkGitUri, urlParams.get('artemisUrl') ?? undefined, config.trustedArtemisHosts) === 'external';
+            !!linkGitUri &&
+            gitLinkKind(
+                {
+                    gitUri: linkGitUri,
+                    artemisUrl: urlParams.get('artemisUrl') ?? undefined,
+                    artemisToken: urlParams.get('artemisToken') ?? undefined
+                },
+                config
+            ) === 'external';
         if (linkGitUri) {
             const problem = external
                 ? checkGitLaunchUri(linkGitUri, { allowedHosts: config.allowedGitHosts, trustedHosts: config.trustedArtemisHosts })
@@ -289,7 +297,7 @@ function App(): React.JSX.Element {
         (appDefinition: string, buildSystemId?: string, replay?: LaunchInputs): void => {
             const link: LaunchInputs = replay ?? { gitUri, gitRef, gitUser, gitMail, artemisUrl, artemisToken, anonymousUser: user };
             // An external link passes on only gitUri and gitRef, and a stored one is checked again, so a removed host stops working.
-            const external = gitSourceOf(link.gitUri, link.artemisUrl, config.trustedArtemisHosts) === 'external';
+            const external = gitLinkKind(link, config) === 'external';
             const problem = external
                 ? checkGitLaunchUri(link.gitUri!, { allowedHosts: config.allowedGitHosts, trustedHosts: config.trustedArtemisHosts })
                 : undefined;
@@ -317,9 +325,10 @@ function App(): React.JSX.Element {
                             accessToken
                         };
 
+                        const kind = gitLinkKind(inputs, config);
                         const envFromMap = createLaunchEnv({
                             ...inputs,
-                            gitSource: gitSourceOf(inputs.gitUri, inputs.artemisUrl, config.trustedArtemisHosts),
+                            gitSource: kind === 'legacy' ? undefined : kind,
                             buildSystemId
                         });
 

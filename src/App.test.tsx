@@ -419,6 +419,27 @@ describe('URL parameters', () => {
         });
     });
 
+    describe('with git links off (allowedGitHosts empty)', () => {
+        const OFF_CONFIG = { ...BASE_CONFIG, allowedGitHosts: [], trustedArtemisHosts: [] };
+        const ARTEMIS_LINK = { appDef: 'java-17', gitUri: GIT_URI, artemisToken: 'token', artemisUrl: TRUSTED_URL, gitUser: 'student' };
+
+        it('keeps an Artemis link from an untrusted host working after a click, without GIT_SOURCE', async () => {
+            await renderApp(query(ARTEMIS_LINK), OFF_CONFIG);
+            expect(theia.ping).not.toHaveBeenCalled();
+            fireEvent.click(await screen.findByRole('button', { name: /Launch Java 17/ }));
+            await launchCount(1);
+            const env = launchRequest().env.fromMap;
+            expect(env).toMatchObject({ GIT_URI: GIT_URI, ARTEMIS_TOKEN: 'token', GIT_USER: 'student' });
+            expect(env.GIT_SOURCE).toBeUndefined();
+        });
+
+        it('refuses a repository link without an Artemis token', async () => {
+            await renderApp(query({ appDef: 'java-17', gitUri: 'https://github.com/o/r.git' }), OFF_CONFIG);
+            screen.getByText(/not enabled on this EduIDE/);
+            expect(screen.queryByRole('button', { name: /Open|Launch/ })).toBeNull();
+        });
+    });
+
     it.each([
         ['the Artemis host is not trusted', { artemisUrl: 'https://evil.example' }],
         ['the link has no Artemis URL', {}]

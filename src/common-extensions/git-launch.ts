@@ -14,6 +14,9 @@ export const DEFAULT_ALLOWED_GIT_HOSTS = ['github.com', 'gitlab.com'];
  * `trustedHosts`) over HTTPS, and never accepts credentials in it.
  */
 export function checkGitLaunchUri(gitUri: string, options: { allowedHosts?: string[]; trustedHosts?: string[] } = {}): string | undefined {
+    if (!gitLinksEnabled(options.allowedHosts)) {
+        return 'Opening repositories from a link is not enabled on this EduIDE.';
+    }
     let url: URL;
     try {
         url = new URL(gitUri);
@@ -45,6 +48,28 @@ export function gitSourceOf(
         return undefined;
     }
     return isTrustedArtemisLink(gitUri, artemisUrl, trustedHosts) ? 'artemis' : 'external';
+}
+
+/** Links to repositories outside Artemis are an alpha feature, on only while `allowedGitHosts` lists a host. */
+export function gitLinksEnabled(allowedHosts: string[] | undefined): boolean {
+    return (allowedHosts ?? DEFAULT_ALLOWED_GIT_HOSTS).some(host => host.trim());
+}
+
+/**
+ * How the page treats a link with a gitUri. While git links are off, a link that is not a trusted Artemis link but
+ * carries an artemisToken works as it did before git links (`legacy`: a click, every parameter passed on, no
+ * GIT_SOURCE), so installations without trustedArtemisHosts keep their Artemis links. Once git links are on, only
+ * trustedArtemisHosts makes a link an Artemis link, so a crafted link cannot pass as one by adding a token.
+ */
+export function gitLinkKind(
+    link: { gitUri?: string; artemisUrl?: string; artemisToken?: string },
+    config: { allowedGitHosts?: string[]; trustedArtemisHosts?: string[] }
+): 'artemis' | 'external' | 'legacy' | undefined {
+    const source = gitSourceOf(link.gitUri, link.artemisUrl, config.trustedArtemisHosts);
+    if (source === 'external' && link.artemisToken && !gitLinksEnabled(config.allowedGitHosts)) {
+        return 'legacy';
+    }
+    return source;
 }
 
 /** `owner/repo` (or `group/subgroup/repo`) for display, from a repository URL. */

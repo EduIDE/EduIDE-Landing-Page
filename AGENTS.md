@@ -123,6 +123,12 @@ a raw string such as `https://github.com\@evil.example/x.git` differently) and `
 again on Resume. One that names a valid `appDef` gets a confirmation button ("Open owner/repo in Java 17")
 instead of the picker, and never starts by itself.
 
+Git links are an alpha feature, on only while `allowedGitHosts` lists a host (`gitLinksEnabled`; the chart
+renders an empty list by default). While off, `checkGitLaunchUri` refuses every external link, and `gitLinkKind`
+returns `legacy` for a link that is not a trusted Artemis link but carries an `artemisToken`: it works as before
+git links (a click, every parameter passed on, no `GIT_SOURCE`), so installations without `trustedArtemisHosts`
+keep their Artemis links. Once on, a token no longer makes a link an Artemis link.
+
 The check compares the host with its port, `isTrustedArtemisLink` compares the hostname without it. A port
 therefore can only make a link fail, never pass.
 
