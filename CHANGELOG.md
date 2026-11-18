@@ -5,6 +5,10 @@ The section of a version becomes the notes of its GitHub Release.
 
 ## [Unreleased]
 
+### Fixes
+
+- Resume passes the parsed URL of an external git link as `GIT_URI`, as the first launch does, instead of the stored string ([#PR](https://github.com/EduIDE/EduIDE-Landing-Page/pull/PR))
+
 ## [1.5.0] - 2026-11-18
 
 ### Features

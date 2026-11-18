@@ -115,7 +115,8 @@ describe('createWorkspaceName with a ref', () => {
     it('separates workspaces by ref and keeps the name without one', () => {
         expect(name('main')).not.toBe(name('solution'));
         expect(name('main')).not.toBe(name());
-        expect(name()).toBe(createWorkspaceName('java-17', undefined, 'ada', 'https://github.com/o/r.git'));
+        // The name main gave this link before refs existed: changing it would orphan existing workspaces.
+        expect(name()).toBe('ws-java-17-r-ada-24716729');
     });
 });
 
