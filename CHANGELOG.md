@@ -5,6 +5,8 @@ The section of a version becomes the notes of its GitHub Release.
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-18
+
 ### Features
 
 - Open a GitHub, GitLab or Gitea/Forgejo repository from a link: `/?appDef=<app>&gitUri=https://<host>/<path>.git&gitRef=<ref>`. The page asks for one click naming the repository, passes `GIT_REF`, and sets `GIT_SOURCE` itself (`artemis` or `external`); each `gitRef` gets its own workspace. Alpha: on only while `allowedGitHosts` lists a host ([#50](https://github.com/EduIDE/EduIDE-Landing-Page/pull/50))
