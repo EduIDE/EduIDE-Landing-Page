@@ -1077,6 +1077,22 @@ describe('session ended', () => {
         expect(theia.launch).toHaveBeenCalledTimes(1);
     });
 
+    it('passes the parsed URL of a stored external link on Resume', async () => {
+        window.sessionStorage.setItem(
+            'eduide.lastLaunch.v1',
+            JSON.stringify({
+                appDefinition: 'java-17',
+                gitUri: 'https://github.com\\@evil.example/x.git',
+                ephemeral: false,
+                savedAt: Date.now()
+            })
+        );
+        await renderApp('/session-ended', WORKSPACE_CONFIG);
+        fireEvent.click(screen.getByRole('button', { name: 'Resume my session' }));
+        await launchCount(1);
+        expect(launchRequest().env.fromMap).toMatchObject({ GIT_URI: 'https://github.com/@evil.example/x.git', GIT_SOURCE: 'external' });
+    });
+
     it('waits for a click, even with a trusted link in the URL', async () => {
         await renderApp(`/session-ended?${new URLSearchParams(TRUSTED_LINK)}`, WORKSPACE_CONFIG);
         screen.getByText(ENDED);

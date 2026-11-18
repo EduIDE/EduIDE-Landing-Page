@@ -5,6 +5,10 @@ The section of a version becomes the notes of its GitHub Release.
 
 ## [Unreleased]
 
+### Fixes
+
+- Resume of a stored external Git link launches with the parsed URL, like a fresh link. Before, it passed the stored string on, so a link such as `https://github.com\@evil.example/x.git` that the host check read as github.com could reach git unparsed
+
 ## [1.5.0] - 2026-11-18
 
 ### Features
@@ -13,7 +17,7 @@ The section of a version becomes the notes of its GitHub Release.
 
 ### Upgrade notes
 
-- A link with a `gitUri` is now either a trusted Artemis link or an external one. An external link is checked (HTTPS, host in `allowedGitHosts` or `trustedArtemisHosts`, no credentials) and passes on only `gitUri` and `gitRef`. Artemis links only work when the hosts of `gitUri` and `artemisUrl` are in `trustedArtemisHosts`; installations whose Artemis links come from other hosts now get refused or lose their Artemis parameters. Add those hosts to `trustedArtemisHosts` in the chart. While `allowedGitHosts` is empty or missing (git links off, the chart default), this does not apply: a link that is not a trusted Artemis link works as in 1.4.x when it carries an `artemisToken` (a click, every parameter but `gitRef` passed on, no `GIT_SOURCE`), and is refused without one.
+- A link with a `gitUri` is now either a trusted Artemis link or an external one. An external link is checked (HTTPS, host in `allowedGitHosts` or `trustedArtemisHosts`, no credentials) and passes on only `gitUri` and `gitRef`. Artemis links only work when the hosts of `gitUri` and `artemisUrl` are in `trustedArtemisHosts`; installations whose Artemis links come from other hosts now get refused or lose their Artemis parameters. Add those hosts to `trustedArtemisHosts` in the chart. While `allowedGitHosts` is empty or missing (git links off, the chart default), this does not apply: a link that is not a trusted Artemis link works as in 1.4.x when it carries an `artemisToken` (a click, every parameter but `gitRef` passed on, no `GIT_SOURCE`), and is refused without one ([#50](https://github.com/EduIDE/EduIDE-Landing-Page/pull/50))
 
 ## [1.4.1] - 2026-11-16
 

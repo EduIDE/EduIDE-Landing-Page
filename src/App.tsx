@@ -304,7 +304,10 @@ function App(): React.JSX.Element {
                 setError(problem);
                 return;
             }
-            const inputs: LaunchInputs = external ? { gitUri: link.gitUri, gitRef: link.gitRef, anonymousUser: link.anonymousUser } : link;
+            // The parsed href, as on the first launch: the check read that form, and git may read a raw string differently.
+            const inputs: LaunchInputs = external
+                ? { gitUri: new URL(link.gitUri!).href, gitRef: link.gitRef, anonymousUser: link.anonymousUser }
+                : link;
             const app = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appDefinition);
             const tryEphemeral = isEphemeralLaunch(app, config.useEphemeralStorage);
             setLaunchEphemeral(tryEphemeral);
