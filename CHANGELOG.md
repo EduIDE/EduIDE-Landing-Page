@@ -5,6 +5,10 @@ The section of a version becomes the notes of its GitHub Release.
 
 ## [Unreleased]
 
+### Fixes
+
+- Resume of a stored external Git link launches with the parsed URL, like a fresh link. Before, it passed the stored string on, so a link such as `https://github.com\@evil.example/x.git` that the host check read as github.com could reach git unparsed
+
 ## [1.5.0] - 2026-11-18
 
 ### Features
