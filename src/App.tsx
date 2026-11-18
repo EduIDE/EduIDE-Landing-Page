@@ -4,6 +4,7 @@ import { getTheiaCloudConfig, LaunchRequest, PingRequest, RequestOptions, TheiaC
 import Keycloak, { KeycloakConfig } from 'keycloak-js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { checkGitLaunchUri, gitLinkKind, repositoryName, sanitizeGitRef } from './common-extensions/git-launch';
 import type { ExtendedAppDefinition, ExtendedTheiaCloudConfig } from './common-extensions/types';
 import { getServiceAuthToken } from './common-extensions/types';
 import { AppLogo } from './components/AppLogo';
@@ -127,6 +128,12 @@ function App(): React.JSX.Element {
     const [gitMail, setGitMail] = useState<string>();
     const [artemisToken, setArtemisToken] = useState<string>();
     const [artemisUrl, setArtemisUrl] = useState<string>();
+    const [gitRef, setGitRef] = useState<string>();
+    // The link named a valid app (?appDef=), so a git link can be confirmed with one click instead of the picker.
+    const [appDefFromLink, setAppDefFromLink] = useState(false);
+    const [showGitPicker, setShowGitPicker] = useState(false);
+    // A git link without an Artemis token that must not be launched (unknown host, credentials, not HTTPS).
+    const [launchBlocked, setLaunchBlocked] = useState(false);
 
     const [autoStart, setAutoStart] = useState<boolean>(false);
     const [invalidAppDef, setInvalidAppDef] = useState<boolean>(false);
@@ -158,6 +165,7 @@ function App(): React.JSX.Element {
                     setSelectedAppDefinition(pathBlueprintSelection);
                     setSelectedAppName(pathBlueprintSelection);
                 }
+                setAppDefFromLink(true);
             } else {
                 setInvalidAppDef(true);
                 setError('Invalid default selection value: ' + pathBlueprintSelection);
@@ -165,16 +173,35 @@ function App(): React.JSX.Element {
             }
         }
 
-        // Get gitUri parameter from URL.
-        if (urlParams.has('gitUri')) {
-            const gitUriParam = urlParams.get('gitUri');
-            if (gitUriParam) {
-                setGitUri(gitUriParam);
+        // A link is either a trusted Artemis link or an external one. Anyone can write an external link, so it is checked
+        // before anything starts and passes on only gitUri and gitRef, never an Artemis URL, token or identity.
+        const linkGitUri = urlParams.get('gitUri');
+        const kind = gitLinkKind(
+            {
+                gitUri: linkGitUri ?? undefined,
+                artemisUrl: urlParams.get('artemisUrl') ?? undefined,
+                artemisToken: urlParams.get('artemisToken') ?? undefined
+            },
+            config
+        );
+        const external = kind === 'external';
+        // A legacy link works exactly as before git links, which knew no gitRef.
+        setGitRef(kind === 'legacy' ? undefined : sanitizeGitRef(urlParams.get('gitRef') ?? undefined));
+        if (linkGitUri) {
+            const problem = external
+                ? checkGitLaunchUri(linkGitUri, { allowedHosts: config.allowedGitHosts, trustedHosts: config.trustedArtemisHosts })
+                : undefined;
+            if (problem) {
+                setError(problem);
+                setLaunchBlocked(true);
+            } else {
+                // The parsed form is what the check saw, so it is also what the session clones.
+                setGitUri(external ? new URL(linkGitUri).href : linkGitUri);
             }
         }
 
         // Get artemisToken parameter from URL.
-        if (urlParams.has('artemisToken')) {
+        if (!external && urlParams.has('artemisToken')) {
             const artemisTokenParam = urlParams.get('artemisToken');
             if (artemisTokenParam) {
                 setArtemisToken(artemisTokenParam);
@@ -182,7 +209,7 @@ function App(): React.JSX.Element {
         }
 
         // Get artemisUrl parameter from URL.
-        if (urlParams.has('artemisUrl')) {
+        if (!external && urlParams.has('artemisUrl')) {
             const artemisUrlParam = urlParams.get('artemisUrl');
             if (artemisUrlParam) {
                 setArtemisUrl(artemisUrlParam);
@@ -190,7 +217,7 @@ function App(): React.JSX.Element {
         }
 
         // Get gitUser parameter from URL.
-        if (urlParams.has('gitUser')) {
+        if (!external && urlParams.has('gitUser')) {
             const gitUserParam = urlParams.get('gitUser');
             if (gitUserParam) {
                 setGitUser(gitUserParam);
@@ -198,7 +225,7 @@ function App(): React.JSX.Element {
         }
 
         // Get gitMail parameter from URL.
-        if (urlParams.has('gitMail')) {
+        if (!external && urlParams.has('gitMail')) {
             const gitMailParam = urlParams.get('gitMail');
             if (gitMailParam) {
                 setGitMail(gitMailParam);
@@ -267,7 +294,17 @@ function App(): React.JSX.Element {
         // Resume passes the stored inputs as `replay`. Setting them as state first would not reach
         // this callback before it runs, and the workspace name would come out different.
         (appDefinition: string, buildSystemId?: string, replay?: LaunchInputs): void => {
-            const inputs: LaunchInputs = replay ?? { gitUri, gitUser, gitMail, artemisUrl, artemisToken, anonymousUser: user };
+            const link: LaunchInputs = replay ?? { gitUri, gitRef, gitUser, gitMail, artemisUrl, artemisToken, anonymousUser: user };
+            // An external link passes on only gitUri and gitRef, and a stored one is checked again, so a removed host stops working.
+            const external = gitLinkKind(link, config) === 'external';
+            const problem = external
+                ? checkGitLaunchUri(link.gitUri!, { allowedHosts: config.allowedGitHosts, trustedHosts: config.trustedArtemisHosts })
+                : undefined;
+            if (problem) {
+                setError(problem);
+                return;
+            }
+            const inputs: LaunchInputs = external ? { gitUri: link.gitUri, gitRef: link.gitRef, anonymousUser: link.anonymousUser } : link;
             const app = config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === appDefinition);
             const tryEphemeral = isEphemeralLaunch(app, config.useEphemeralStorage);
             setLaunchEphemeral(tryEphemeral);
@@ -279,7 +316,7 @@ function App(): React.JSX.Element {
                     .then(() => {
                         // ping successful continue with launch
                         const workspaceUser = config.useKeycloak ? username : inputs.anonymousUser;
-                        const workspace = createWorkspaceName(appDefinition, buildSystemId, workspaceUser, inputs.gitUri);
+                        const workspace = createWorkspaceName(appDefinition, buildSystemId, workspaceUser, inputs.gitUri, inputs.gitRef);
 
                         const requestOptions: RequestOptions = {
                             timeout: LAUNCH_REQUEST_TIMEOUT,
@@ -287,7 +324,12 @@ function App(): React.JSX.Element {
                             accessToken
                         };
 
-                        const envFromMap = createLaunchEnv({ ...inputs, buildSystemId });
+                        const kind = gitLinkKind(inputs, config);
+                        const envFromMap = createLaunchEnv({
+                            ...inputs,
+                            gitSource: kind === 'legacy' ? undefined : kind,
+                            buildSystemId
+                        });
 
                         const launchEnv = { fromMap: envFromMap };
                         const launchUser = config.useKeycloak ? (email ?? username)! : inputs.anonymousUser!;
@@ -407,7 +449,7 @@ function App(): React.JSX.Element {
                 setLoading(false);
             });
         },
-        [config, gitUri, username, user, artemisToken, artemisUrl, gitUser, gitMail, email]
+        [config, gitUri, gitRef, username, user, artemisToken, artemisUrl, gitUser, gitMail, email]
     );
 
     const handleAppSelected = (appId: string, _: string): void => {
@@ -433,7 +475,7 @@ function App(): React.JSX.Element {
         if (!config?.useKeycloak || !username || !keycloakClient || !launch || launch.ephemeral) {
             return;
         }
-        const workspace = createWorkspaceName(launch.appDefinition, launch.buildSystemId, username, launch.gitUri);
+        const workspace = createWorkspaceName(launch.appDefinition, launch.buildSystemId, username, launch.gitUri, launch.gitRef);
         const client = keycloakClient;
         client
             .updateToken(30)
@@ -556,6 +598,9 @@ function App(): React.JSX.Element {
         clearLastLaunch();
         handleNavigation('home');
     };
+    const gitRepository = repositoryName(gitUri);
+    // A git link that names an app: one confirmation click, never an automatic start.
+    const confirmGitLaunch = !autoStart && !!gitUri && !artemisToken && appDefFromLink && !showGitPicker;
 
     const standaloneAppBuildSystems =
         config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === standaloneAppDef)?.buildSystems ?? [];
@@ -584,12 +629,16 @@ function App(): React.JSX.Element {
                                         ? 'Confirm your identity'
                                         : autoStart
                                           ? 'Launch your Online IDE'
-                                          : standaloneWizardStep === 'buildSystem'
-                                            ? 'Choose your build system'
-                                            : 'Choose your programming language'}
+                                          : confirmGitLaunch
+                                            ? `Open ${gitRepository ?? 'the repository'}`
+                                            : standaloneWizardStep === 'buildSystem'
+                                              ? 'Choose your build system'
+                                              : gitRepository && !artemisToken
+                                                ? `Choose the programming language for ${gitRepository}`
+                                                : 'Choose your programming language'}
                             </h2>
                             <div>
-                                {needsLogin ? (
+                                {launchBlocked && !isSessionEnded ? undefined : needsLogin ? (
                                     <LoginButton login={authenticate} />
                                 ) : isSessionEnded ? (
                                     <SessionEnded
@@ -600,6 +649,23 @@ function App(): React.JSX.Element {
                                     />
                                 ) : needsIdentityConfirmation ? (
                                     <ConfirmIdentity suggestedUser={suggestedUser ?? ''} onConfirm={handleConfirmIdentity} />
+                                ) : confirmGitLaunch ? (
+                                    <div>
+                                        <LaunchApp
+                                            appName={selectedAppName}
+                                            appDefinition={selectedAppDefinition}
+                                            gitUri={gitUri}
+                                            ephemeral={isEphemeralLaunch(
+                                                config.additionalApps?.find(a => (a.serviceAuthToken || a.appId) === selectedAppDefinition),
+                                                config.useEphemeralStorage
+                                            )}
+                                            onStartSession={handleStartSession}
+                                            label={`Open ${gitRepository ?? 'the repository'} in ${selectedAppName}`}
+                                        />
+                                        <button className='App__link-button' onClick={() => setShowGitPicker(true)}>
+                                            Choose another language
+                                        </button>
+                                    </div>
                                 ) : autoStart ? (
                                     <LaunchApp
                                         appName={selectedAppName}

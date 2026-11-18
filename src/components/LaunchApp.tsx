@@ -7,8 +7,17 @@ interface LaunchAppProps {
     gitUri?: string;
     ephemeral?: boolean;
     onStartSession: (appDefinition: string) => void;
+    /** Button text instead of "Launch <appName>". */
+    label?: string;
 }
-export const LaunchApp: React.FC<LaunchAppProps> = ({ appName, appDefinition, gitUri, ephemeral, onStartSession }: LaunchAppProps) => {
+export const LaunchApp: React.FC<LaunchAppProps> = ({
+    appName,
+    appDefinition,
+    gitUri,
+    ephemeral,
+    onStartSession,
+    label
+}: LaunchAppProps) => {
     const repositoryHost = getHostname(gitUri);
     return (
         <>
@@ -19,7 +28,7 @@ export const LaunchApp: React.FC<LaunchAppProps> = ({ appName, appDefinition, gi
                 </p>
             )}
             <button className='App__try-now-button' onClick={() => onStartSession(appDefinition)}>
-                Launch {appName} &nbsp;&nbsp;&rarr;
+                {label ?? `Launch ${appName}`} &nbsp;&nbsp;&rarr;
             </button>
         </>
     );

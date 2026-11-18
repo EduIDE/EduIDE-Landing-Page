@@ -11,6 +11,7 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export interface LaunchInputs {
     gitUri?: string;
+    gitRef?: string;
     gitUser?: string;
     gitMail?: string;
     artemisUrl?: string;

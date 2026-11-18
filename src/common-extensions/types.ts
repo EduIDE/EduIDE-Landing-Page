@@ -117,6 +117,8 @@ export type ExtendedTheiaCloudConfig = Omit<TheiaCloudConfig, 'additionalApps'> 
     sentryDsn?: string;
     sentryTracesSampleRate?: number;
     privacy?: PrivacyConfig;
+    /** Hosts a git link that is not an Artemis link may clone from. Empty or missing turns git links off (see git-launch.ts). */
+    allowedGitHosts?: string[];
     /** Hosts whose Artemis links may start a session without a click. */
     trustedArtemisHosts?: string[];
 };

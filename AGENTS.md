@@ -10,6 +10,7 @@ React SPA served by nginx.
 ```
 src/App.tsx                    most of the application: config, URL parsing, Keycloak, launch
 src/launch.ts                  workspace naming, launch env, trusted hosts, launch retries
+src/common-extensions/git-launch.ts  checks for git links that are not trusted Artemis links, GIT_SOURCE
 src/lastLaunch.ts              what the last launch in this tab used, so /session-ended can resume it
 src/sessionEndReason.ts        picks why the stored launch ended from the workspace list
 src/common-extensions/types.ts the EduIDE-specific config surface
@@ -107,13 +108,39 @@ present — the Artemis flow never sets `TEMPLATE`.
 
 ## URL parameters are a second config channel
 
-`appDef`, `gitUri`, `gitUser`, `gitMail`, `artemisUrl`, `artemisToken`, `user`.
-They become session environment variables whose names are a contract with the
-IDE image's entrypoint, not with this repo.
+`appDef`, `gitUri`, `gitRef`, `gitUser`, `gitMail`, `artemisUrl`, `artemisToken`, `user`.
+They become session environment variables (`GIT_REF` and `GIT_SOURCE` for two of them)
+whose names are a contract with the IDE image's entrypoint and Scorpio, not with this repo.
 
-`gitUri` is cloned verbatim with no credential injection, so a private repo
-needs credentials in the URL. **Treat it as secret-bearing.** `nginx.conf` logs
-paths without the query for this reason; keep it that way.
+A link with a `gitUri` is either a trusted Artemis link (`isTrustedArtemisLink`: the hosts of both `gitUri`
+and `artemisUrl` are in `trustedArtemisHosts`) or an external one. Anyone can write an external link, so it is
+checked before anything starts (`src/common-extensions/git-launch.ts`), whatever else it carries: a valid HTTPS
+URL on a host in `allowedGitHosts` (no default; for example `github.com`, `gitlab.com` and Gitea hosts) or
+in `trustedArtemisHosts`, and no credentials in it. A link that fails shows the reason and nothing else, never
+the credentials. An external link passes on only `GIT_URI` (the parsed `url.href`, because plain git can read
+a raw string such as `https://github.com\@evil.example/x.git` differently) and `GIT_REF`; `artemisUrl`,
+`artemisToken`, `gitUser` and `gitMail` are dropped, also on Resume, and a stored external link is checked
+again on Resume. One that names a valid `appDef` gets a confirmation button ("Open owner/repo in Java 17")
+instead of the picker, and never starts by itself.
+
+Git links are an alpha feature, on only while `allowedGitHosts` lists a host (`gitLinksEnabled`; the chart
+renders an empty list by default, and a missing key counts as empty). While off, `checkGitLaunchUri` refuses every external link, and `gitLinkKind`
+returns `legacy` for a link that is not a trusted Artemis link but carries an `artemisToken`: it works as before
+git links (a click, every parameter but `gitRef` passed on, no `GIT_SOURCE`), so installations without `trustedArtemisHosts`
+keep their Artemis links. Once on, a token no longer makes a link an Artemis link.
+
+The check compares the host with its port, `isTrustedArtemisLink` compares the hostname without it. A port
+therefore can only make a link fail, never pass.
+
+`GIT_SOURCE` is derived here and never read from the link: `artemis` for a trusted Artemis link,
+`external` for any other `gitUri`, unset without one. `gitRef` becomes `GIT_REF` after
+`sanitizeGitRef`, `src/lastLaunch.ts` keeps it so Resume clones the same ref, and a set ref is part of the
+workspace name, so each ref gets its own volume.
+
+An Artemis `gitUri` is cloned verbatim and carries the student's VCS token.
+**Treat it as secret-bearing.** `nginx.conf` logs paths without the query for
+this reason; keep it that way. Private GitHub repositories never put
+credentials in the link; Scorpio signs the student in inside the session.
 
 **A token in a link proves nothing**, because anyone can write one. A link with
 `gitUri` and `artemisToken` shows a Launch button, and only starts by itself when

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
     createAnonymousUser,
+    createLaunchEnv,
     createWorkspaceName,
     isEphemeralLaunch,
     isTrustedArtemisLink,
@@ -105,6 +106,31 @@ describe('createAnonymousUser', () => {
     it('creates a different id each time', () => {
         expect(createAnonymousUser()).toMatch(/^anonymous-[0-9a-f]{16}$/);
         expect(createAnonymousUser()).not.toBe(createAnonymousUser());
+    });
+});
+
+describe('createWorkspaceName with a ref', () => {
+    const name = (gitRef?: string): string => createWorkspaceName('java-17', undefined, 'ada', 'https://github.com/o/r.git', gitRef);
+
+    it('separates workspaces by ref and keeps the name without one', () => {
+        expect(name('main')).not.toBe(name('solution'));
+        expect(name('main')).not.toBe(name());
+        expect(name()).toBe(createWorkspaceName('java-17', undefined, 'ada', 'https://github.com/o/r.git'));
+    });
+});
+
+describe('createLaunchEnv', () => {
+    it('passes gitRef and gitSource as GIT_REF and GIT_SOURCE', () => {
+        expect(createLaunchEnv({ gitUri: 'https://github.com/o/r.git', gitRef: 'main', gitSource: 'external' })).toEqual({
+            THEIA: 'true',
+            GIT_URI: 'https://github.com/o/r.git',
+            GIT_REF: 'main',
+            GIT_SOURCE: 'external'
+        });
+    });
+
+    it('leaves out what the link does not set', () => {
+        expect(createLaunchEnv({})).toEqual({ THEIA: 'true' });
     });
 });
 

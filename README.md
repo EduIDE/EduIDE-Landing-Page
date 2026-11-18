@@ -7,7 +7,7 @@ Landing page for EduIDE Cloud workspace management, providing a user-friendly in
 - **User Authentication**: Keycloak-based authentication and authorization
 - **Workspace Management**: Launch and manage multiple cloud-based IDEs
 - **Dynamic Configuration**: Runtime configuration via `config.js`
-- **Query Parameters**: Support for various URL parameters (appDef, gitUri, gitUser, gitMail, artemisToken, artemisUrl, user)
+- **Query Parameters**: Support for various URL parameters (appDef, gitUri, gitRef, gitUser, gitMail, artemisToken, artemisUrl, user)
 - **Responsive Design**: Modern UI with dark/light theme support
 
 ## Prerequisites
@@ -141,15 +141,18 @@ The landing page supports various URL query parameters to pre-configure the sess
 |-----------|------|-------------|
 | `appDef` | string | Application definition to launch |
 | `gitUri` | string | Git repository URL to clone |
+| `gitRef` | string | Branch, tag or commit to check out (`GIT_REF`) |
 | `gitUser` | string | Git username for authentication |
 | `gitMail` | string | Git email for authentication |
 | `artemisUrl` | string | Artemis service URL |
 | `artemisToken` | string | Artemis authentication token |
 | `user` | string | Suggested identity without Keycloak. It is not adopted automatically; the visitor must confirm it first (`ConfirmIdentity`) |
 
-**Auto-clone and private repositories:** On session start the repository is cloned from `gitUri` exactly as provided; no credential is added. For a private repository the credential must be embedded in `gitUri` itself, for example `https://<user>:<token>@host/org/repo.git`. A plain `gitUri` without embedded credentials only works for public repositories. Because `gitUri` may contain a token, treat the URL as sensitive.
+**Auto-clone and private repositories:** On session start the repository is cloned from `gitUri`; no credential is added. For a private Artemis repository the credential must be embedded in `gitUri` itself, for example `https://<user>:<token>@host/org/repo.git`, and the hosts of `gitUri` and `artemisUrl` must be in `trustedArtemisHosts`. Because `gitUri` may contain a token, treat the URL as sensitive. Any other link can only open public repositories; private ones ask the student to sign in inside the session.
 
-Example: `https://your-landing-page.com/?appDef=myapp&gitUri=https://github.com/user/repo.git`
+**Links to GitHub, GitLab and Gitea/Forgejo (alpha):** on only while `allowedGitHosts` lists a host; the EduIDE-Helm chart leaves it empty, and a config without the key counts as empty. While it is empty, a `gitUri` link without an `artemisToken` is refused, and an Artemis link from a host outside `trustedArtemisHosts` works as before after a click. With hosts listed, a `gitUri` that is not a trusted Artemis link must be an HTTPS URL on a host in `allowedGitHosts` (config key, for example `['github.com', 'gitlab.com']` plus your Gitea or Forgejo host) or in `trustedArtemisHosts`. Other links are refused before anything starts, with the reason shown. Credentials in the URL are refused. Such a link passes on only `gitUri` and `gitRef`; `artemisUrl`, `artemisToken`, `gitUser` and `gitMail` are dropped. The page sets `GIT_SOURCE` itself: `artemis` for a trusted Artemis link, `external` for any other `gitUri`.
+
+Example: `https://your-landing-page.com/?appDef=myapp&gitUri=https://github.com/user/repo.git&gitRef=main`
 
 ## NPM Scripts
 
